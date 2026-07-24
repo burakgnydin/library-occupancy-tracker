@@ -31,6 +31,14 @@ public class ExceptionHandlingMiddleware
         {
             await WriteErrorResponseAsync(context, HttpStatusCode.Conflict, ex.Message);
         }
+        catch (UnauthorizedException ex)
+        {
+            await WriteErrorResponseAsync(context, HttpStatusCode.Unauthorized, ex.Message);
+        }
+        catch (ForbiddenException ex)
+        {
+            await WriteErrorResponseAsync(context, HttpStatusCode.Forbidden, ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception occurred while processing {Path}", context.Request.Path);

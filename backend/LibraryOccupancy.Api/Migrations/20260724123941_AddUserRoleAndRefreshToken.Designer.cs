@@ -3,6 +3,7 @@ using System;
 using LibraryOccupancy.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LibraryOccupancy.Api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724123941_AddUserRoleAndRefreshToken")]
+    partial class AddUserRoleAndRefreshToken
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -55,9 +58,6 @@ namespace LibraryOccupancy.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("QrCodeToken")
-                        .IsUnique();
-
-                    b.HasIndex("Name", "Address")
                         .IsUnique();
 
                     b.ToTable("Libraries");

@@ -2,7 +2,7 @@ namespace LibraryOccupancy.Api.Services.Abstracts;
 
 public interface ILibraryService
 {
-    Task<List<LibraryDto>> GetAllAsync();
+    Task<PagedResultDto<LibraryDto>> GetAllAsync(LibraryQueryParameters parameters);
     Task<LibraryDto> GetByIdAsync(Guid id);
     Task<LibraryDto> CreateAsync(CreateLibraryDto dto);
     Task<LibraryDto> UpdateAsync(Guid id, UpdateLibraryDto dto);

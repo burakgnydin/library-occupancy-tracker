@@ -15,10 +15,17 @@ public class LibraryService : ILibraryService
         _mapper = mapper;
     }
 
-    public async Task<List<LibraryDto>> GetAllAsync()
+    public async Task<PagedResultDto<LibraryDto>> GetAllAsync(LibraryQueryParameters parameters)
     {
-        var libraries = await _libraryRepository.GetAllAsync();
-        return _mapper.Map<List<LibraryDto>>(libraries);
+        var (items, totalCount) = await _libraryRepository.GetPagedAsync(parameters);
+
+        return new PagedResultDto<LibraryDto>
+        {
+            Items = _mapper.Map<List<LibraryDto>>(items),
+            TotalCount = totalCount,
+            PageNumber = parameters.PageNumber,
+            PageSize = parameters.PageSize
+        };
     }
 
     public async Task<LibraryDto> GetByIdAsync(Guid id)
@@ -29,6 +36,12 @@ public class LibraryService : ILibraryService
 
     public async Task<LibraryDto> CreateAsync(CreateLibraryDto dto)
     {
+        var alreadyExists = await _libraryRepository.ExistsByNameAndAddressAsync(dto.Name, dto.Address);
+        if (alreadyExists)
+        {
+            throw new ConflictException("A library with this name and address already exists.");
+        }
+
         var library = _mapper.Map<Library>(dto);
         library.Id = Guid.NewGuid();
         library.QrCodeToken = Guid.NewGuid().ToString();
@@ -36,7 +49,7 @@ public class LibraryService : ILibraryService
         library.CreatedAt = DateTime.UtcNow;
 
         _libraryRepository.Add(library);
-        await _unitOfWork.SaveChangesAsync();
+        await SaveChangesGuardingUniquenessAsync();
 
         return _mapper.Map<LibraryDto>(library);
     }
@@ -45,15 +58,37 @@ public class LibraryService : ILibraryService
     {
         var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("kütüphane", id);
 
+        var alreadyExists = await _libraryRepository.ExistsByNameAndAddressAsync(dto.Name, dto.Address, excludeId: id);
+        if (alreadyExists)
+        {
+            throw new ConflictException("A library with this name and address already exists.");
+        }
+
         // GetByIdAsync zaten bu entity'yi aynı DbContext üzerinde tracked olarak döndürüyor,
         // bu yüzden Map(dto, library) property'leri yerinde değiştiriyor ve change tracker
         // farkı otomatik yakalıyor. Ayrıca _libraryRepository.Update(library) çağırmaya
         // gerek yok (tüm alanları gereksiz yere Modified işaretlerdi).
         _mapper.Map(dto, library);
 
-        await _unitOfWork.SaveChangesAsync();
+        await SaveChangesGuardingUniquenessAsync();
 
         return _mapper.Map<LibraryDto>(library);
+    }
+
+    // The app-level ExistsByNameAndAddressAsync check above is a fast, friendly-error fast path,
+    // but it's inherently a check-then-insert race: two concurrent requests can both pass it before
+    // either commits. The DB's unique index on (Name, Address) is the real guarantee — this turns a
+    // constraint violation from that race into the same ConflictException instead of a raw 500.
+    private async Task SaveChangesGuardingUniquenessAsync()
+    {
+        try
+        {
+            await _unitOfWork.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            throw new ConflictException("A library with this name and address already exists.");
+        }
     }
 
     public async Task DeleteAsync(Guid id)

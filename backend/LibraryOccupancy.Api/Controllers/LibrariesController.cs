@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+
 namespace LibraryOccupancy.Api.Controllers;
 
 [ApiController]
@@ -14,9 +16,9 @@ public class LibrariesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<LibraryDto>>> GetAll()
+    public async Task<ActionResult<PagedResultDto<LibraryDto>>> GetAll([FromQuery] LibraryQueryParameters queryParameters)
     {
-        var libraries = await _libraryService.GetAllAsync();
+        var libraries = await _libraryService.GetAllAsync(queryParameters);
         return Ok(libraries);
     }
 
@@ -27,6 +29,7 @@ public class LibrariesController : ControllerBase
         return Ok(library);
     }
 
+    [Authorize(Policy = PolicyNames.StaffOrAbove)]
     [HttpPost]
     public async Task<ActionResult<LibraryDto>> Create(CreateLibraryDto dto)
     {
@@ -34,6 +37,7 @@ public class LibrariesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = library.Id }, library);
     }
 
+    [Authorize(Policy = PolicyNames.StaffOrAbove)]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<LibraryDto>> Update(Guid id, UpdateLibraryDto dto)
     {
@@ -41,6 +45,7 @@ public class LibrariesController : ControllerBase
         return Ok(library);
     }
 
+    [Authorize(Policy = PolicyNames.StaffOrAbove)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -55,20 +60,19 @@ public class LibrariesController : ControllerBase
         return File(qrCodeBytes, "image/png");
     }
 
-    // TODO: userId şu an query parametresinden alınıyor çünkü henüz JWT auth yok.
-    // User sistemi ve auth eklendiğinde bu parametre kaldırılıp giriş yapmış
-    // kullanıcının kimliği token'dan otomatik okunacak.
+    [Authorize]
     [HttpPost("{id:guid}/checkin")]
-    public async Task<ActionResult<CheckInOutResultDto>> CheckIn(Guid id, [FromQuery] Guid userId)
+    public async Task<ActionResult<CheckInOutResultDto>> CheckIn(Guid id)
     {
-        var result = await _occupancyService.CheckInAsync(id, userId);
+        var result = await _occupancyService.CheckInAsync(id, this.GetCurrentUserId());
         return Ok(result);
     }
 
+    [Authorize]
     [HttpPost("{id:guid}/checkout")]
-    public async Task<ActionResult<CheckInOutResultDto>> CheckOut(Guid id, [FromQuery] Guid userId)
+    public async Task<ActionResult<CheckInOutResultDto>> CheckOut(Guid id)
     {
-        var result = await _occupancyService.CheckOutAsync(id, userId);
+        var result = await _occupancyService.CheckOutAsync(id, this.GetCurrentUserId());
         return Ok(result);
     }
 }

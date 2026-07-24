@@ -1,12 +1,16 @@
 global using Microsoft.AspNetCore.Mvc;
 global using Microsoft.EntityFrameworkCore;
 global using AutoMapper;
+global using LibraryOccupancy.Api.Authorization;
 global using LibraryOccupancy.Api.Services.Exceptions;
 global using LibraryOccupancy.Api.Models;
 global using LibraryOccupancy.Api.Data;
+global using LibraryOccupancy.Api.DTOs.Auth;
 global using LibraryOccupancy.Api.DTOs.Common;
 global using LibraryOccupancy.Api.DTOs.Library;
 global using LibraryOccupancy.Api.DTOs.User;
+global using LibraryOccupancy.Api.Extensions;
 global using LibraryOccupancy.Api.Repositories.Abstracts;
 global using LibraryOccupancy.Api.Services;
 global using LibraryOccupancy.Api.Services.Abstracts;
+global using LibraryOccupancy.Api.Services.Settings;

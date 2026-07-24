@@ -5,4 +5,12 @@ public class OccupancyLogRepository : RepositoryBase<OccupancyLog>, IOccupancyLo
     public OccupancyLogRepository(ApplicationDbContext context) : base(context)
     {
     }
+
+    public async Task<OccupancyLog?> GetLatestByUserIdAsync(Guid userId)
+    {
+        return await _dbSet
+            .Where(log => log.UserId == userId)
+            .OrderByDescending(log => log.Timestamp)
+            .FirstOrDefaultAsync();
+    }
 }

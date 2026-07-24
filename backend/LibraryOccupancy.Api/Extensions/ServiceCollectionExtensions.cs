@@ -1,11 +1,21 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using LibraryOccupancy.Api.Repositories.Concretes;
 using LibraryOccupancy.Api.Services.Concretes;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.Sqlite;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 namespace LibraryOccupancy.Api.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    public const string LoginRateLimitPolicy = "login";
+
     public static WebApplicationBuilder ConfigureSerilog(this WebApplicationBuilder builder)
     {
         builder.Host.UseSerilog((context, services, configuration) => configuration
@@ -18,14 +28,31 @@ public static class ServiceCollectionExtensions
         return builder;
     }
 
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
-        services.AddControllers();
-        services.AddOpenApi();
+        services.AddControllers()
+            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                // Automatic [ApiController] model-state validation otherwise returns ASP.NET Core's
+                // own ValidationProblemDetails shape ({"type":...,"errors":{...}}), a different
+                // contract than every other error in this API (ExceptionHandlingMiddleware's
+                // {"message":"..."}). Reformat it to match so clients only ever handle one shape.
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var firstError = context.ModelState.Values
+                        .SelectMany(v => v.Errors)
+                        .Select(e => e.ErrorMessage)
+                        .FirstOrDefault() ?? "Invalid request.";
+
+                    return new BadRequestObjectResult(new { message = firstError });
+                };
+            });
+        services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
         services.AddAutoMapper(cfg => { }, typeof(Program).Assembly);
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlite(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlite(BuildSqliteConnectionString(configuration, environment)));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ILibraryRepository, LibraryRepository>();
@@ -34,6 +61,148 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOccupancyService, OccupancyService>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IAuthService, AuthService>();
+
+        services.Configure<InitialAdminSettings>(configuration.GetSection(InitialAdminSettings.SectionName));
+
+        services.AddJwtAuthentication(configuration);
+        services.AddLoginRateLimiting();
+
+        return services;
+    }
+
+    // If a DTO field is added without a matching AutoMapper configuration, AutoMapper silently
+    // leaves it at its default value at runtime instead of failing — the same "silent wrong
+    // behavior instead of loud failure" class of bug this project has hit before (relative paths,
+    // CHANGE_ME placeholders). AssertConfigurationIsValid() catches that immediately at startup,
+    // in Development, rather than someone noticing a field is always empty in production.
+    public static void ValidateAutoMapperConfiguration(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment())
+        {
+            return;
+        }
+
+        using var scope = app.Services.CreateScope();
+        var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
+        mapper.ConfigurationProvider.AssertConfigurationIsValid();
+    }
+
+    // Brute-force guard for /api/auth/login: 5 attempts per minute per client IP, no queueing
+    // (a 6th attempt within the window is rejected immediately with 429, not delayed).
+    private static IServiceCollection AddLoginRateLimiting(this IServiceCollection services)
+    {
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.AddPolicy(LoginRateLimitPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+        });
+
+        return services;
+    }
+
+    // "CHANGE_ME" placeholders in appsettings.json look like structurally valid values (a non-empty
+    // string, a long-enough key) so nothing stops the app from starting and silently running with
+    // them if appsettings.Development.json is missing or ASPNETCORE_ENVIRONMENT isn't 'Development'.
+    // RequireConfigured turns that into a loud, actionable startup failure instead of a silent one —
+    // reused for every critical setting below (connection string, JWT key/issuer/audience), and meant
+    // to be reused for any future required setting too.
+    private const string PlaceholderSentinel = "CHANGE_ME";
+
+    private static void RequireConfigured(string settingPath, [NotNull] string? value, int minLength = 1)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new InvalidOperationException(
+                $"{settingPath} is not configured. Set a real value in appsettings.Development.json " +
+                "(gitignored) or the current environment's configuration.");
+        }
+
+        if (value.Contains(PlaceholderSentinel, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{settingPath} is still set to a '{PlaceholderSentinel}' placeholder from appsettings.json. " +
+                "This usually means appsettings.Development.json is missing or ASPNETCORE_ENVIRONMENT isn't " +
+                "'Development'. Refusing to start rather than silently running with an invalid/insecure value.");
+        }
+
+        if (value.Length < minLength)
+        {
+            throw new InvalidOperationException(
+                $"{settingPath} must be at least {minLength} characters long (got {value.Length}).");
+        }
+    }
+
+    // A relative SQLite "Data Source" resolves against the process's current working directory,
+    // not the appsettings folder. Launching the app a different way (e.g. running the built .dll
+    // directly instead of `dotnet run` from the project root) silently connects to a separate,
+    // empty database file. Anchoring to ContentRootPath makes this independent of launch method.
+    private static string BuildSqliteConnectionString(IConfiguration configuration, IHostEnvironment environment)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        RequireConfigured("ConnectionStrings:DefaultConnection", connectionString);
+
+        var builder = new SqliteConnectionStringBuilder(connectionString);
+        RequireConfigured("ConnectionStrings:DefaultConnection", builder.DataSource);
+
+        if (!Path.IsPathRooted(builder.DataSource))
+        {
+            builder.DataSource = Path.Combine(environment.ContentRootPath, builder.DataSource);
+        }
+
+        Console.WriteLine($"Using SQLite database at: {builder.DataSource}");
+
+        return builder.ConnectionString;
+    }
+
+    private static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+            ?? throw new InvalidOperationException("Jwt settings are not configured.");
+
+        RequireConfigured("Jwt:Key", jwtSettings.Key, minLength: 32);
+        RequireConfigured("Jwt:Issuer", jwtSettings.Issuer);
+        RequireConfigured("Jwt:Audience", jwtSettings.Audience);
+
+        services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtSettings.Audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key)),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
+
+        // Single source of truth for "which roles count as X" — used by both declarative
+        // [Authorize(Policy = ...)] attributes and imperative IAuthorizationService checks
+        // (e.g. UsersController's "self or staff" logic), so the two never drift apart.
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(PolicyNames.StaffOrAbove, policy => policy.RequireRole(Roles.SuperAdmin, Roles.Admin));
+            options.AddPolicy(PolicyNames.SuperAdminOnly, policy => policy.RequireRole(Roles.SuperAdmin));
+        });
 
         return services;
     }

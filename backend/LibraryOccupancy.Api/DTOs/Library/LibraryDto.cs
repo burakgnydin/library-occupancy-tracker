@@ -9,5 +9,7 @@ public class LibraryDto
     public string District { get; set; } = string.Empty;
     public int Capacity { get; set; }
     public int CurrentOccupancy { get; set; }
+    public int OccupancyPercentage { get; set; }
+    public OccupancyStatus OccupancyStatus { get; set; }
     public string QrCodeToken { get; set; } = string.Empty;
 }

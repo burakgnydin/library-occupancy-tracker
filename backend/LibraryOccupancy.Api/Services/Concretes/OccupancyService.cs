@@ -24,6 +24,12 @@ public class OccupancyService : IOccupancyService
         var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("kütüphane", libraryId);
         await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId);
 
+        var latestLog = await _occupancyLogRepository.GetLatestByUserIdAsync(userId);
+        if (latestLog is not null && latestLog.Type == OccupancyLogType.CheckIn)
+        {
+            throw new ValidationException("You are already checked in at another library. Please check out first.");
+        }
+
         if (library.CurrentOccupancy >= library.Capacity)
         {
             throw new ValidationException("Library is currently full");
@@ -43,6 +49,17 @@ public class OccupancyService : IOccupancyService
     {
         var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("kütüphane", libraryId);
         await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId);
+
+        var latestLog = await _occupancyLogRepository.GetLatestByUserIdAsync(userId);
+        if (latestLog is null || latestLog.Type != OccupancyLogType.CheckIn)
+        {
+            throw new ValidationException("You are not checked in anywhere.");
+        }
+
+        if (latestLog.LibraryId != libraryId)
+        {
+            throw new ValidationException("You are checked in at a different library. Please check out from there first.");
+        }
 
         if (library.CurrentOccupancy <= 0)
         {
@@ -73,11 +90,15 @@ public class OccupancyService : IOccupancyService
 
     private static CheckInOutResultDto ToResultDto(Library library, OccupancyLog log)
     {
+        var occupancyPercentage = OccupancyCalculator.CalculatePercentage(library.CurrentOccupancy, library.Capacity);
+
         return new CheckInOutResultDto
         {
             LibraryId = library.Id,
             CurrentOccupancy = library.CurrentOccupancy,
             Capacity = library.Capacity,
+            OccupancyPercentage = occupancyPercentage,
+            OccupancyStatus = OccupancyCalculator.CalculateStatus(occupancyPercentage),
             Type = log.Type,
             Timestamp = log.Timestamp
         };

@@ -19,6 +19,8 @@ public static class WebApplicationExtensions
         }
 
         app.UseHttpsRedirection();
+        app.UseAuthentication();
+        app.UseRateLimiter();
         app.UseAuthorization();
         app.MapControllers();
 

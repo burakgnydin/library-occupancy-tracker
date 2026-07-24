@@ -9,6 +9,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Library> Libraries => Set<Library>();
     public DbSet<User> Users => Set<User>();
     public DbSet<OccupancyLog> OccupancyLogs => Set<OccupancyLog>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -16,6 +17,7 @@ public class ApplicationDbContext : DbContext
         {
             entity.HasKey(l => l.Id);
             entity.HasIndex(l => l.QrCodeToken).IsUnique();
+            entity.HasIndex(l => new { l.Name, l.Address }).IsUnique();
         });
 
         modelBuilder.Entity<User>(entity =>
@@ -36,6 +38,17 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(o => o.User)
                 .WithMany(u => u.OccupancyLogs)
                 .HasForeignKey(o => o.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+            entity.HasIndex(r => r.Token).IsUnique();
+
+            entity.HasOne(r => r.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
