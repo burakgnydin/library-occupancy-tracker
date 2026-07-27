@@ -19,6 +19,7 @@ public static class WebApplicationExtensions
         }
 
         app.UseHttpsRedirection();
+        app.UseCors(ServiceCollectionExtensions.CorsPolicyName);
         app.UseAuthentication();
         app.UseRateLimiter();
         app.UseAuthorization();

@@ -15,6 +15,7 @@ namespace LibraryOccupancy.Api.Extensions;
 public static class ServiceCollectionExtensions
 {
     public const string LoginRateLimitPolicy = "login";
+    public const string CorsPolicyName = "AllowFrontend";
 
     public static WebApplicationBuilder ConfigureSerilog(this WebApplicationBuilder builder)
     {
@@ -68,6 +69,7 @@ public static class ServiceCollectionExtensions
 
         services.AddJwtAuthentication(configuration);
         services.AddLoginRateLimiting();
+        services.AddFrontendCors(configuration, environment);
 
         return services;
     }
@@ -106,6 +108,40 @@ public static class ServiceCollectionExtensions
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));
+        });
+
+        return services;
+    }
+
+    // Development: Expo/Metro picks a different port on every run (web preview, tunnel, LAN -
+    // 8081, 8082, 8099, ...), so instead of enumerating ports we allow any localhost/127.0.0.1
+    // origin via SetIsOriginAllowed. Production: only explicitly configured origins are allowed
+    // (Cors:AllowedOrigins in appsettings.json) - the permissive localhost predicate never runs
+    // outside Development. An empty/unconfigured origin list in production simply means no
+    // browser-based frontend is allowed yet - it fails closed, not open.
+    private static IServiceCollection AddFrontendCors(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        services.AddCors(options =>
+        {
+            options.AddPolicy(CorsPolicyName, policy =>
+            {
+                if (environment.IsDevelopment())
+                {
+                    policy.SetIsOriginAllowed(origin =>
+                            Uri.TryCreate(origin, UriKind.Absolute, out var originUri) &&
+                            (originUri.Host == "localhost" || originUri.Host == "127.0.0.1"))
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                }
+                else
+                {
+                    var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+                    policy.WithOrigins(allowedOrigins)
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                }
+            });
         });
 
         return services;
