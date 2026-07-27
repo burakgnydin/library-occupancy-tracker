@@ -2,6 +2,8 @@
 
 Kütüphane doluluk takip sisteminin backend'i. Kullanıcılar QR kod ile check-in/check-out yaparak kütüphanelerin anlık doluluk durumunu takip edebilir.
 
+> Bu proje bir monorepo'nun parçasıdır: bu dizin (`backend/`) API'yi, kardeş dizin `../mobile` ise React Native/Expo mobil istemciyi içerir (bkz. `mobile/README.md`).
+
 ## Kullanılan Teknolojiler
 
 - **.NET 10** / ASP.NET Core Web API
