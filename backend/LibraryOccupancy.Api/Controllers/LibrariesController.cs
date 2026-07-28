@@ -60,19 +60,30 @@ public class LibrariesController : ControllerBase
         return File(qrCodeBytes, "image/png");
     }
 
+    // Literal segment "checkin-status" never collides with the {id:guid} route above -
+    // ASP.NET Core's endpoint routing resolves literal segments before falling back to
+    // constrained parameters, and "checkin-status" fails the guid constraint anyway.
+    [Authorize]
+    [HttpGet("checkin-status")]
+    public async Task<ActionResult<MyCheckInStatusDto>> GetMyCheckInStatus()
+    {
+        var status = await _occupancyService.GetMyStatusAsync(this.GetCurrentUserId());
+        return Ok(status);
+    }
+
     [Authorize]
     [HttpPost("{id:guid}/checkin")]
-    public async Task<ActionResult<CheckInOutResultDto>> CheckIn(Guid id)
+    public async Task<ActionResult<CheckInOutResultDto>> CheckIn(Guid id, [FromBody] CheckInRequestDto dto)
     {
-        var result = await _occupancyService.CheckInAsync(id, this.GetCurrentUserId());
+        var result = await _occupancyService.CheckInAsync(id, this.GetCurrentUserId(), dto.QrToken);
         return Ok(result);
     }
 
     [Authorize]
     [HttpPost("{id:guid}/checkout")]
-    public async Task<ActionResult<CheckInOutResultDto>> CheckOut(Guid id)
+    public async Task<ActionResult<CheckInOutResultDto>> CheckOut(Guid id, [FromBody] CheckOutRequestDto dto)
     {
-        var result = await _occupancyService.CheckOutAsync(id, this.GetCurrentUserId());
+        var result = await _occupancyService.CheckOutAsync(id, this.GetCurrentUserId(), dto.QrToken);
         return Ok(result);
     }
 }

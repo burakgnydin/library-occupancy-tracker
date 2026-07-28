@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { Library } from '../types/library';
@@ -8,15 +8,21 @@ import { occupancyLabels, occupancyStyles } from '../utils/occupancyStyles';
 
 interface LibraryCardProps {
   library: Library;
+  // libraryId'yi parametre olarak alir (kart yerine ebeveynin bir onPress
+  // closure'i kurmasi yerine) - boylece ebeveyn tarafinda tek, stabil bir
+  // useCallback yeterli olur ve her satirin kendi inline fonksiyonu
+  // LibraryCard'in React.memo'sunu etkisiz kilmaz.
+  onPressLibrary: (libraryId: string) => void;
 }
 
-function LibraryCard({ library }: LibraryCardProps) {
+function LibraryCard({ library, onPressLibrary }: LibraryCardProps) {
   const statusStyle = occupancyStyles[library.occupancyStatus];
   const fillPercentage = Math.min(100, Math.max(0, library.occupancyPercentage));
 
   return (
-    <View
-      className="mb-3 rounded-2xl bg-surface p-4"
+    <Pressable
+      onPress={() => onPressLibrary(library.id)}
+      className="mb-3 rounded-2xl bg-surface p-4 active:opacity-80"
       style={{
         shadowColor: colors.ink,
         shadowOpacity: 0.08,
@@ -60,7 +66,7 @@ function LibraryCard({ library }: LibraryCardProps) {
           <Text className={`text-xs font-medium ${statusStyle.text}`}>{occupancyLabels[library.occupancyStatus]}</Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

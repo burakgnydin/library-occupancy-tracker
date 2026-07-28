@@ -52,6 +52,12 @@ public static class ServiceCollectionExtensions
         services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
         services.AddAutoMapper(cfg => { }, typeof(Program).Assembly);
 
+        // SignalR's JSON hub protocol has its own serializer options, separate from MVC's
+        // AddJsonOptions above - without this, enums would go over the wire as numbers instead
+        // of the strings ("occupancyStatus":"Low") every REST response uses.
+        services.AddSignalR()
+            .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlite(BuildSqliteConnectionString(configuration, environment)));
 
@@ -119,6 +125,13 @@ public static class ServiceCollectionExtensions
     // (Cors:AllowedOrigins in appsettings.json) - the permissive localhost predicate never runs
     // outside Development. An empty/unconfigured origin list in production simply means no
     // browser-based frontend is allowed yet - it fails closed, not open.
+    //
+    // AllowCredentials() is required for SignalR: its default browser client sends credentials
+    // on the negotiate/websocket handshake, and CORS rejects credentialed cross-origin requests
+    // unless the policy both allows credentials and pins to specific origins - AllowAnyOrigin()
+    // combined with AllowCredentials() is invalid and throws at runtime, which is why both
+    // branches below use an origin allowlist (SetIsOriginAllowed / WithOrigins) rather than
+    // AllowAnyOrigin.
     private static IServiceCollection AddFrontendCors(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddCors(options =>
@@ -131,7 +144,8 @@ public static class ServiceCollectionExtensions
                             Uri.TryCreate(origin, UriKind.Absolute, out var originUri) &&
                             (originUri.Host == "localhost" || originUri.Host == "127.0.0.1"))
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 }
                 else
                 {
@@ -139,7 +153,8 @@ public static class ServiceCollectionExtensions
 
                     policy.WithOrigins(allowedOrigins)
                         .AllowAnyHeader()
-                        .AllowAnyMethod();
+                        .AllowAnyMethod()
+                        .AllowCredentials();
                 }
             });
         });

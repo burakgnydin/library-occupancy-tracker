@@ -8,9 +8,9 @@ import FormInput from '../components/FormInput';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
-import type { AuthStackParamList } from '../navigation/AppNavigator';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-type RegisterNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Register'>;
+type RegisterNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>;
 
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterNavigationProp>();
@@ -31,8 +31,20 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     const outcome = await register(fullName.trim(), email.trim(), password);
-    if (outcome === 'registered-but-login-failed') {
-      navigation.navigate('Login', { infoMessage: 'Hesabınız oluşturuldu, giriş yapabilirsiniz.' });
+    if (outcome === 'success') {
+      // Libraries her zaman stack'in kokunde - otomatik giris basariliysa
+      // Login/Register'i tamamen kaldirip misafir olarak kaldigi ekrana doner.
+      navigation.popToTop();
+    } else if (outcome === 'registered-but-login-failed') {
+      // navigate() yerine popTo(): stack burada Libraries -> Login -> Register
+      // (Login'in "Kayıt ol" linkiyle buraya gelinmiş) - Login zaten stack'te
+      // Register'in bir alt katmaninda mevcut. QrScannerScreen'de duzeltilen
+      // ayni React Navigation belirsizligi (navigate()'in bazen MEVCUT
+      // instance'a donmek yerine yeni bir instance push etmesi) burada da
+      // gecerli - popTo() acikca "stack'teki mevcut Login'e don" davranisini
+      // garanti ederek geri tusu/kaydirma ile "kaldigi yere donme"
+      // invaryantini (bkz. useRequireAuth) bozmadan korur.
+      navigation.popTo('Login', { infoMessage: 'Hesabınız oluşturuldu, giriş yapabilirsiniz.' });
     }
   };
 

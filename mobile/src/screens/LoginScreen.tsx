@@ -9,10 +9,10 @@ import FormInput from '../components/FormInput';
 import PrimaryButton from '../components/PrimaryButton';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
-import type { AuthStackParamList } from '../navigation/AppNavigator';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-type LoginNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
-type LoginRouteProp = RouteProp<AuthStackParamList, 'Login'>;
+type LoginNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
+type LoginRouteProp = RouteProp<RootStackParamList, 'Login'>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginNavigationProp>();
@@ -41,7 +41,12 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setInfoMessage(null);
-    await login(email.trim(), password);
+    const success = await login(email.trim(), password);
+    if (success) {
+      // Libraries her zaman stack'in kokunde - basarili girişten sonra
+      // Login/Register'i tamamen kaldirip misafir olarak kaldigi ekrana doner.
+      navigation.popToTop();
+    }
   };
 
   return (

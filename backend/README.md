@@ -13,6 +13,7 @@ Kütüphane doluluk takip sisteminin backend'i. Kullanıcılar QR kod ile check-
 - **AutoMapper** — DTO-Entity dönüşümü
 - **BCrypt.Net-Next** — şifre hash'leme
 - **QRCoder** — kütüphane QR kod üretimi
+- **SignalR** (`Microsoft.AspNetCore.SignalR`) — doluluk değişikliklerinin gerçek zamanlı yayınlanması
 - **Serilog** — loglama (console + dosya)
 - **Scalar** — interaktif API dokümantasyonu
 
@@ -78,6 +79,10 @@ Uygulama her başladığında veritabanında `SuperAdmin` rolünde bir kullanıc
 - Rol kontrolü ham string yerine `Authorization/Roles.cs` ve `Authorization/PolicyNames.cs`'te tanımlı sabitler ve policy'ler ile yapılır: **`StaffOrAbove`** (`Admin` veya `SuperAdmin`), **`SuperAdminOnly`** (sadece `SuperAdmin`).
 - Hem `[Authorize(Policy = ...)]` attribute'ları hem de controller içindeki imperative kontroller (`IAuthorizationService.AuthorizeAsync`) aynı policy tanımını kullanır — "kim staff sayılır" kararı tek bir yerden verilir, iki kontrol mekanizması birbirinden asla ayrışmaz.
 
+### QR Kod Doğrulaması
+- Check-in/check-out isteğiyle birlikte gönderilen `qrToken`, sunucuda kütüphanenin gerçek `QrCodeToken` değeriyle karşılaştırılır (`OccupancyService.EnsureQrTokenMatches`) — doğrulama **istemciye değil, sunucuya** aittir. Mobil istemci kamerayla okuduğu ham değeri olduğu gibi taşır; eşleşmezse istek `400 Bad Request` (`"Invalid QR code for this library."`) ile reddedilir.
+- `QrCodeToken`, `LibraryDto` üzerinden **hiçbir anonim/genel yanıtta** dönmez — `GET /api/libraries`, `GET /api/libraries/{id}` ve kütüphane oluşturma/güncelleme yanıtları dahil. Token'a tek erişim yolu, `GET /api/libraries/{id}/qrcode` üzerinden üretilen PNG görselinin fiziksel olarak kamerayla okunmasıdır.
+
 ## İş Kuralları
 
 ### Doluluk Yüzdesi ve Durumu
@@ -92,6 +97,12 @@ Uygulama her başladığında veritabanında `SuperAdmin` rolünde bir kullanıc
 - Kontrol iki seviyede uygulanır:
   1. **App seviyesi** — istek işlenmeden önce hızlı bir kontrol yapılır (dostane hata mesajı için).
   2. **DB seviyesi** — `Libraries` tablosunda `(Name, Address)` üzerinde composite UNIQUE index vardır; eşzamanlı isteklerde app seviyesi kontrolü atlatılsa bile veritabanı garantör olarak devreye girer, oluşan constraint ihlali de aynı `409 Conflict`'e çevrilir.
+
+## Gerçek Zamanlı Özellikler
+
+- Bir check-in/check-out başarıyla tamamlandığında (yani `IUnitOfWork.SaveChangesAsync()` ile **commit edildikten SONRA**), `OccupancyService` `IHubContext<OccupancyHub>` üzerinden `library-{libraryId}` grubundaki tüm bağlı istemcilere `OccupancyUpdated` event'i (`CheckInOutResultDto` payload'ıyla) yayınlar. Commit-önce-yayın sırası bilinçli: istemcilere asla veritabanına yazılmamış/geri alınmış bir değişiklik hakkında bilgi gitmez.
+- Hub (`/hubs/occupancy`) kimlik doğrulaması gerektirmez — kütüphane listesi/detayı gibi anonim erişimle tutarlı olacak şekilde, giriş yapmamış misafir kullanıcılar da canlı doluluk güncellemesi alabilir.
+- **Bildirim hataları asıl işlemi etkilemez:** yayın çağrısı (`BroadcastOccupancyUpdateAsync`) `try/catch` ile izole edilmiştir — transient bir SignalR/backplane hatası oluşursa sadece loglanır (`ILogger`), asla yukarı fırlatılmaz. Check-in/check-out işlemi zaten commit edildiği için HTTP yanıtı her zaman `200 OK` döner; bildirim katmanındaki bir arıza istemciye asla "işlem başarısız" gibi yanlış bir sinyal vermez.
 
 ## Kurulum
 
@@ -186,10 +197,26 @@ Yanıt `PagedResultDto<LibraryDto>` şeklindedir: `items`, `totalCount`, `pageNu
 
 | Metot | Endpoint | Açıklama | Yetki |
 |---|---|---|---|
-| POST | `/api/libraries/{id}/checkin` | Kütüphaneye giriş — doluluk +1 | Giriş yapmış herhangi bir kullanıcı |
-| POST | `/api/libraries/{id}/checkout` | Kütüphaneden çıkış — doluluk -1 | Giriş yapmış herhangi bir kullanıcı |
+| GET | `/api/libraries/checkin-status` | Giriş yapmış kullanıcının şu an check-in olduğu kütüphaneyi (varsa) döndürür | Giriş yapmış herhangi bir kullanıcı |
+| POST | `/api/libraries/{id}/checkin` | Kütüphaneye giriş — doluluk +1. Body: `{ "qrToken": "<QR koddan okunan değer>" }` | Giriş yapmış herhangi bir kullanıcı |
+| POST | `/api/libraries/{id}/checkout` | Kütüphaneden çıkış — doluluk -1. Body: `{ "qrToken": "<QR koddan okunan değer>" }` | Giriş yapmış herhangi bir kullanıcı |
 
 Kullanıcı kimliği artık query parametresinden değil, JWT'deki `ClaimTypes.NameIdentifier` claim'inden okunur — bir kullanıcı yalnızca kendi adına check-in/check-out yapabilir. Occupancy güncellemesi ve log kaydı, Unit of Work sayesinde **tek bir transaction** içinde atomik olarak gerçekleşir.
+
+`checkin`/`checkout` artık body'de bir `qrToken` alanı **gerektirir** — sunucu bunu kütüphanenin gerçek QR kod değeriyle karşılaştırır, eşleşmezse `400` döner (bkz. [Güvenlik → QR Kod Doğrulaması](#qr-kod-doğrulaması)).
+
+### Gerçek Zamanlı (SignalR)
+
+| Tip | Adres | Açıklama |
+|---|---|---|
+| Hub | `/hubs/occupancy` | Doluluk değişikliklerinin anlık yayınlandığı SignalR hub'ı — kimlik doğrulaması gerektirmez |
+
+| Hub Metodu | Parametre | Açıklama |
+|---|---|---|
+| `JoinLibraryGroup` | `libraryId: Guid` | Çağıran bağlantıyı ilgili kütüphanenin güncelleme grubuna ekler |
+| `LeaveLibraryGroup` | `libraryId: Guid` | Çağıran bağlantıyı gruptan çıkarır |
+
+Bir client bir gruba katıldıktan sonra, o kütüphanede check-in/check-out olduğunda `OccupancyUpdated` event'i (`CheckInOutResultDto` payload'ıyla) alır (bkz. [Gerçek Zamanlı Özellikler](#gerçek-zamanlı-özellikler)).
 
 ## API Dokümantasyonu (Scalar)
 

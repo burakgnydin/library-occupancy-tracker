@@ -24,6 +24,7 @@ public static class WebApplicationExtensions
         app.UseRateLimiter();
         app.UseAuthorization();
         app.MapControllers();
+        app.MapHub<OccupancyHub>(OccupancyHub.RoutePattern);
 
         return app;
     }

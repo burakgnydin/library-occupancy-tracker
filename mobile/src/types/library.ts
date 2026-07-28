@@ -10,7 +10,6 @@ export interface Library {
   currentOccupancy: number;
   occupancyPercentage: number;
   occupancyStatus: OccupancyStatus;
-  qrCodeToken: string;
 }
 
 export interface PagedResult<T> {
@@ -29,4 +28,29 @@ export interface LibraryQueryParams {
   pageSize?: number;
   sortBy?: 'name' | 'occupancy';
   sortDescending?: boolean;
+}
+
+export interface CheckInRequest {
+  qrToken: string;
+}
+
+export interface CheckOutRequest {
+  qrToken: string;
+}
+
+export type OccupancyLogType = 'CheckIn' | 'CheckOut';
+
+export interface CheckInOutResult {
+  libraryId: string;
+  currentOccupancy: number;
+  capacity: number;
+  occupancyPercentage: number;
+  occupancyStatus: OccupancyStatus;
+  type: OccupancyLogType;
+  timestamp: string;
+}
+
+export interface MyCheckInStatus {
+  libraryId: string | null;
+  checkedInAt: string | null;
 }

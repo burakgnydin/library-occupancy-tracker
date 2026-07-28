@@ -26,7 +26,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "TraKutup, QR kod okutma islemi icin kameraya erisim izni istiyor."
+          "cameraPermission": "TraKütüp, kütüphane girişindeki QR kodu okutabilmen için kameraya erişim izni istiyor. Bu izin sadece QR kod tarama sırasında kullanılır."
         }
       ],
       "expo-font"

@@ -11,5 +11,4 @@ public class LibraryDto
     public int CurrentOccupancy { get; set; }
     public int OccupancyPercentage { get; set; }
     public OccupancyStatus OccupancyStatus { get; set; }
-    public string QrCodeToken { get; set; } = string.Empty;
 }

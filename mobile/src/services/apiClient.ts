@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig, isAxiosError } from 'axios';
 
 import { secureStorage } from './secureStorage';
+import { resolveApiBaseUrl } from '../utils/apiBaseUrl';
 import type { AuthResponse, RefreshRequest } from '../types/auth';
 
 export const ACCESS_TOKEN_KEY = 'accessToken';
@@ -10,7 +11,7 @@ const REQUEST_TIMEOUT_MS = 15000;
 const REFRESH_TIMEOUT_MS = 10000;
 
 const apiClient = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_BASE_URL,
+  baseURL: resolveApiBaseUrl(),
   timeout: REQUEST_TIMEOUT_MS,
 });
 

@@ -1,59 +1,37 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
 
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import LibraryListScreen from '../screens/LibraryListScreen';
+import LibraryDetailScreen from '../screens/LibraryDetailScreen';
+import QrScannerScreen from '../screens/QrScannerScreen';
+import AuthHeaderStatus from '../components/AuthHeaderStatus';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 
-export type AuthStackParamList = {
+// Tek stack: LibraryListScreen misafir/giris yapmis herkes icin kok ekran.
+// isAuthenticated artik "hangi stack gosterilecek" degil, "hangi eylemlere
+// izin var" (bkz. useRequireAuth) icin kullaniliyor.
+export type RootStackParamList = {
+  Libraries: undefined;
+  // qrVerifiedAction/qrToken: QrScannerScreen'in basarili bir tarama sonrasi bu
+  // ekrana geri "sonuc" bildirme yontemi - LoginScreen'deki infoMessage
+  // parametresiyle ayni desen (bkz. LibraryDetailScreen'de setParams ile
+  // temizlenmesi). qrToken, kamerayla okunan ham deger - beklenen token'la
+  // karsilastirma artik backend'de yapildigi icin (bkz. libraryService.checkIn/
+  // checkOut) bu ekran/Scanner onu hic bilmiyor, sadece tasiyor.
+  LibraryDetail: { libraryId: string; qrVerifiedAction?: 'checkin' | 'checkout'; qrToken?: string };
+  QrScanner: { libraryId: string; action: 'checkin' | 'checkout' };
   Login: { infoMessage?: string } | undefined;
   Register: undefined;
 };
 
-export type AppStackParamList = {
-  Libraries: undefined;
-};
-
-const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-const AppStack = createNativeStackNavigator<AppStackParamList>();
-
-function AuthNavigator() {
-  return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} />
-    </AuthStack.Navigator>
-  );
-}
-
-function HeaderLogoutButton() {
-  const logout = useAuthStore((state) => state.logout);
-  return (
-    <Pressable onPress={() => logout()} hitSlop={8} style={{ marginRight: 12 }}>
-      <Ionicons name="log-out-outline" size={22} color={colors.danger} />
-    </Pressable>
-  );
-}
-
-function AppStackNavigator() {
-  return (
-    <AppStack.Navigator>
-      <AppStack.Screen
-        name="Libraries"
-        component={LibraryListScreen}
-        options={{ title: 'Kütüphaneler', headerRight: () => <HeaderLogoutButton /> }}
-      />
-    </AppStack.Navigator>
-  );
-}
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isHydrating = useAuthStore((state) => state.isHydrating);
   const hydrate = useAuthStore((state) => state.hydrate);
 
@@ -70,6 +48,44 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>{isAuthenticated ? <AppStackNavigator /> : <AuthNavigator />}</NavigationContainer>
+    <NavigationContainer>
+      <RootStack.Navigator screenOptions={{ headerShadowVisible: false }}>
+        <RootStack.Screen
+          name="Libraries"
+          component={LibraryListScreen}
+          options={{ title: 'Kütüphaneler', headerRight: () => <AuthHeaderStatus /> }}
+        />
+        <RootStack.Screen name="LibraryDetail" component={LibraryDetailScreen} options={{ title: 'Kütüphane' }} />
+        <RootStack.Screen
+          name="QrScanner"
+          component={QrScannerScreen}
+          // Ekranin kendisi izin durumuna gore header'i (transparan/koyu vs.
+          // normal) dinamik olarak navigation.setOptions ile ayarliyor -
+          // burasi sadece baslangic/varsayilan degeri.
+          options={{ presentation: 'modal', title: 'QR Tara' }}
+        />
+        <RootStack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{
+            presentation: 'modal',
+            headerShown: true,
+            headerTransparent: true,
+            headerTitle: '',
+            headerTintColor: colors.ink,
+          }}
+        />
+        <RootStack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerTitle: '',
+            headerTintColor: colors.ink,
+          }}
+        />
+      </RootStack.Navigator>
+    </NavigationContainer>
   );
 }

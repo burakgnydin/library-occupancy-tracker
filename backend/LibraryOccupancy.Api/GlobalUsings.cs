@@ -1,8 +1,10 @@
 global using Microsoft.AspNetCore.Mvc;
+global using Microsoft.AspNetCore.SignalR;
 global using Microsoft.EntityFrameworkCore;
 global using AutoMapper;
 global using LibraryOccupancy.Api.Authorization;
 global using LibraryOccupancy.Api.Services.Exceptions;
+global using LibraryOccupancy.Api.Hubs;
 global using LibraryOccupancy.Api.Models;
 global using LibraryOccupancy.Api.Data;
 global using LibraryOccupancy.Api.DTOs.Auth;

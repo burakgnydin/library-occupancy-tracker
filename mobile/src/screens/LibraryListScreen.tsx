@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,23 +10,30 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import LibraryCard from '../components/LibraryCard';
 import PrimaryButton from '../components/PrimaryButton';
 import { getLibraries } from '../services/libraryService';
+import { joinLibraryGroup, leaveLibraryGroup, onOccupancyUpdated } from '../services/signalRService';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors } from '../theme/colors';
-import type { Library } from '../types/library';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { CheckInOutResult, Library } from '../types/library';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Libraries'>;
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 400;
 // Bu projenin responsive tasarim kurali icin referans tablet breakpoint'i (bkz. CLAUDE.md).
 const TABLET_BREAKPOINT = 768;
 
-type FetchMode = 'initial' | 'refresh' | 'more';
+type FetchMode = 'initial' | 'refresh' | 'more' | 'silent';
 
 export default function LibraryListScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const { width } = useWindowDimensions();
   const numColumns = width >= TABLET_BREAKPOINT ? 2 : 1;
 
@@ -70,7 +77,11 @@ export default function LibraryListScreen() {
       if (mode === 'initial') setIsLoading(true);
       if (mode === 'refresh') setIsRefreshing(true);
       if (mode === 'more') setIsLoadingMore(true);
-      setError(null);
+      // 'silent' (odaklanmada arka plan senkronu) hicbir loading gostergesini
+      // tetiklemez - kullanici fark etmeden calisir. Onceki bir hatayi da
+      // simdiden temizlemiyoruz (basarili olursa asagida temizlenir, basarisiz
+      // olursa mevcut hata/veri durumuna dokunmadan sessizce vazgeciyoruz).
+      if (mode !== 'silent') setError(null);
 
       try {
         const result = await getLibraries({
@@ -82,11 +93,16 @@ export default function LibraryListScreen() {
         if (requestId !== requestIdRef.current) return;
 
         lastFailedModeRef.current = null;
+        setError(null);
         setItems((prev) => (mode === 'more' ? [...prev, ...result.items] : result.items));
         setPageNumber(result.pageNumber);
         setTotalPages(result.totalPages);
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
+        // Sessiz senkron basarisiz olursa kullaniciyi rahatsiz etmeyiz -
+        // mevcut liste/hata durumu neyse oyle kalir, bir sonraki odaklanmada
+        // tekrar denenir (bkz. asagidaki useFocusEffect).
+        if (mode === 'silent') return;
         lastFailedModeRef.current = mode;
         setError(getApiErrorMessage(err, 'Kütüphaneler yüklenemedi. Lütfen tekrar deneyin.'));
       } finally {
@@ -107,6 +123,40 @@ export default function LibraryListScreen() {
   useEffect(() => {
     fetchPage(1, 'initial');
   }, [fetchPage]);
+
+  // fetchPage'in en guncel halini bir ref'te tutuyoruz ki asagidaki
+  // useFocusEffect'in dependency array'i BOS kalabilsin. Eger fetchPage'i
+  // dogrudan bagimlilik olarak versek, arama metni her degistiginde
+  // (debouncedSearch degisip fetchPage yeniden olusunca) bu efekt de -ekran
+  // zaten odaktayken- tekrar tetiklenir ve yukaridaki 'initial' fetch'iyle
+  // CAKISAN gereksiz bir 'silent' istek daha atardik. Bos dependency array,
+  // bu callback'in SADECE gercek focus/blur gecislerinde calismasini saglar.
+  const fetchPageRef = useRef(fetchPage);
+  useEffect(() => {
+    fetchPageRef.current = fetchPage;
+  }, [fetchPage]);
+
+  // Ekrana her donuste (orn. bir kutuphanede check-in yapip detaydan geri
+  // gelince) mevcut arama/filtre durumuyla ilk sayfayi sessizce yeniden ceker.
+  // SignalR zaten anlik guncelleme sagliyor (bkz. handleOccupancyUpdated) -
+  // bu, ekran arka plandayken kacirilmis olabilecek guncellemeleri (SignalR
+  // baglantisi kopmus/henuz kurulmamis olabilir) yakalayan bir guvenlik agi.
+  // Ilk mount'ta yukaridaki 'initial' fetch zaten calistigi icin, ilk
+  // odaklanmayi atlayip sadece SONRAKI odaklanmalarda calisiyoruz.
+  const hasFocusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        return;
+      }
+      // Zaten devam eden bir istek varsa (orn. arama sonucu hala geliyor)
+      // ustune bir tane daha eklemeye gerek yok - o istek zaten taze veriyi
+      // getirecek.
+      if (isFetchingRef.current) return;
+      fetchPageRef.current(1, 'silent');
+    }, []),
+  );
 
   const handleRefresh = useCallback(() => {
     fetchPage(1, 'refresh');
@@ -135,15 +185,92 @@ export default function LibraryListScreen() {
     }
   }, [pageNumber, fetchPage]);
 
+  // Stabil referans - renderItem'in her cagrisinda yeniden olusturulmuyor,
+  // boylece LibraryCard'a gecen prop degismiyor ve React.memo etkili kaliyor
+  // (navigation nesnesinin kendisi React Navigation tarafindan stabil tutulur).
+  const handleCardPress = useCallback(
+    (libraryId: string) => navigation.navigate('LibraryDetail', { libraryId }),
+    [navigation],
+  );
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Library>) => (
       <View style={{ flex: 1 }}>
-        <LibraryCard library={item} />
+        <LibraryCard library={item} onPressLibrary={handleCardPress} />
       </View>
     ),
-    [],
+    [handleCardPress],
   );
   const keyExtractor = useCallback((item: Library) => item.id, []);
+
+  // Sadece o kaydi guncelleyerek tum listeyi yeniden cekmeden doluluk
+  // gostergesini taze tutar - degismeyen kartlar icin ayni referansi
+  // dondurdugunden LibraryCard'in React.memo'su gereksiz yere tetiklenmez.
+  //
+  // LibraryDetailScreen'deki handleOccupancyUpdated ile ayni requestIdRef
+  // korumasi: sayaci ilerleterek, bu SignalR guncellemesinden ONCE baslamis
+  // ama HENUZ uctaki bir fetchPage (silent/refresh/more) yaniti geri
+  // dondugunde, o yanitin (daha eski bir DB anindan geldigi icin gorece
+  // "bayat" olabilecek) tam array replace'i bu az once uygulanan taze
+  // degerin uzerine yazamasin diye - fetchPage'in basari bloğu zaten
+  // requestId !== requestIdRef.current kontrolunu yapiyor, burada sadece
+  // sayaci ilerletmek yeterli.
+  const handleOccupancyUpdated = useCallback((update: CheckInOutResult) => {
+    requestIdRef.current += 1;
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === update.libraryId
+          ? {
+              ...item,
+              currentOccupancy: update.currentOccupancy,
+              occupancyPercentage: update.occupancyPercentage,
+              occupancyStatus: update.occupancyStatus,
+            }
+          : item,
+      ),
+    );
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = onOccupancyUpdated(handleOccupancyUpdated);
+      return unsubscribe;
+    }, [handleOccupancyUpdated]),
+  );
+
+  // ID kumesinin stabil bir temsili - useFocusEffect'in bagimliligi bu olsun
+  // diye, `items`'in kendisi degil. `items` referansi hem sayfalama/aramada
+  // HEM DE her tek handleOccupancyUpdated cagrisinda (yukarida, sadece bir
+  // kaydin icerigini guncelleyen .map()) degisiyor - eger asagidaki effect
+  // dogrudan `items`'e bagli olsaydi, listede goruntulenen kutuphaneler HIC
+  // degismese bile her doluluk guncellemesinde (potansiyel olarak sik sik)
+  // tum gruplardan ayrilip yeniden katilma (leave+join) tetiklenirdi. Bu
+  // string sadece gercekten farkli bir ID kumesi olustugunda (sayfa/arama
+  // degisince) degisir.
+  const visibleLibraryIdsKey = useMemo(
+    () =>
+      items
+        .map((item) => item.id)
+        .sort()
+        .join(','),
+    [items],
+  );
+
+  // O an listede yuklu olan kutuphanelerin gruplarina katilir - arama/
+  // sayfalama ile items degistikce fark otomatik senkronlanir. Basitlik icin
+  // "gorunur" degil "yuklu" kayitlar baz alinir (viewport takibi icin
+  // FlatList'in onViewableItemsChanged'i gerekirdi) - tipik sayfa
+  // boyutlarinda (10-birkaç sayfa) performans sorunu yaratmaz.
+  useFocusEffect(
+    useCallback(() => {
+      const currentIds = visibleLibraryIdsKey ? visibleLibraryIdsKey.split(',') : [];
+      currentIds.forEach((id) => joinLibraryGroup(id));
+
+      return () => {
+        currentIds.forEach((id) => leaveLibraryGroup(id));
+      };
+    }, [visibleLibraryIdsKey]),
+  );
 
   const showFullScreenLoading = isLoading && items.length === 0;
   const showFullScreenError = Boolean(error) && items.length === 0 && !isLoading;
