@@ -14,14 +14,16 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
+import ActiveCheckInBanner from '../components/ActiveCheckInBanner';
 import LibraryCard from '../components/LibraryCard';
 import PrimaryButton from '../components/PrimaryButton';
-import { getLibraries } from '../services/libraryService';
+import { getLibraries, getMyCheckInStatus } from '../services/libraryService';
 import { joinLibraryGroup, leaveLibraryGroup, onOccupancyUpdated } from '../services/signalRService';
+import { useAuthStore } from '../store/authStore';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import type { CheckInOutResult, Library } from '../types/library';
+import type { CheckInOutResult, Library, MyCheckInStatus } from '../types/library';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Libraries'>;
 
@@ -36,6 +38,7 @@ export default function LibraryListScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { width } = useWindowDimensions();
   const numColumns = width >= TABLET_BREAKPOINT ? 2 : 1;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -48,6 +51,13 @@ export default function LibraryListScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // "Şu An Buradayım" banner'ı icin - misafirlerde hic cagrilmaz (backend zaten
+  // [Authorize]). Bu, liste sayfalamasindan tamamen bagimsiz, ayri bir veri
+  // kaynagi oldugu icin fetchPage'in requestId/mode mekanizmasina dahil
+  // edilmiyor; hatasi da sessiz (bu "nice to have" bir ozet, REST akisinin
+  // geri kalanini bozmamali - bkz. LibraryDetailScreen'deki ayni felsefe).
+  const [checkInStatus, setCheckInStatus] = useState<MyCheckInStatus | null>(null);
 
   // Debounce'lu arama + arka arkaya gelen istekler yuzunden eski bir yanitin
   // daha yeni bir aramanin sonucunu ezmesini onlemek icin istek sirasi takibi.
@@ -203,6 +213,23 @@ export default function LibraryListScreen() {
   );
   const keyExtractor = useCallback((item: Library) => item.id, []);
 
+  // ActiveCheckInBanner primitive prop'lar aldigi ve memo() ile sarili oldugu
+  // icin (bkz. ActiveCheckInBanner.tsx), bu elemani da checkInStatus'un
+  // ilgili alanlari degismedigi surece ayni referansla dondurup LibraryListScreen'in
+  // her render'inda (orn. arama kutusuna yazarken) gereksiz yeniden render'ini
+  // engelliyoruz.
+  const checkInBannerElement = useMemo(
+    () => (
+      <ActiveCheckInBanner
+        libraryId={checkInStatus?.libraryId ?? null}
+        libraryName={checkInStatus?.libraryName ?? null}
+        checkedInAt={checkInStatus?.checkedInAt ?? null}
+        onPressLibrary={handleCardPress}
+      />
+    ),
+    [checkInStatus?.libraryId, checkInStatus?.libraryName, checkInStatus?.checkedInAt, handleCardPress],
+  );
+
   // Sadece o kaydi guncelleyerek tum listeyi yeniden cekmeden doluluk
   // gostergesini taze tutar - degismeyen kartlar icin ayni referansi
   // dondurdugunden LibraryCard'in React.memo'su gereksiz yere tetiklenmez.
@@ -236,6 +263,36 @@ export default function LibraryListScreen() {
       const unsubscribe = onOccupancyUpdated(handleOccupancyUpdated);
       return unsubscribe;
     }, [handleOccupancyUpdated]),
+  );
+
+  // Ekrana her odaklanmada (ilk mount dahil) taze check-in durumu ceker -
+  // ornegin LibraryDetailScreen'den check-out yapip geri donunce banner bu
+  // sayede otomatik kaybolur, baska bir cihazdan check-in yapilmissa da
+  // burada gorunur. SignalR'daki OccupancyUpdated event'i sadece agregat
+  // doluluk sayilarini tasir, "kim check-in yapti" bilgisini icermedigi icin
+  // bu durumun kaynagi hep REST + focus-refresh olmali.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) {
+        setCheckInStatus(null);
+        return;
+      }
+      let isActive = true;
+      getMyCheckInStatus()
+        .then((status) => {
+          if (isActive) setCheckInStatus(status);
+        })
+        .catch((err) => {
+          // Kullaniciya gorunur bir hata gostermiyoruz (bu ikincil bir ozellik,
+          // banner sadece bir sonraki odaklanmada sessizce tekrar denenir) -
+          // ama signalRService.ts'deki ayni felsefeyle en azindan gelistirici/log
+          // seviyesinde fark edilebilir olsun diye uyari basiyoruz.
+          console.warn('[checkin-status] Güncellenemedi:', err);
+        });
+      return () => {
+        isActive = false;
+      };
+    }, [isAuthenticated]),
   );
 
   // ID kumesinin stabil bir temsili - useFocusEffect'in bagimliligi bu olsun
@@ -350,6 +407,7 @@ export default function LibraryListScreen() {
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.4}
           keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={checkInBannerElement}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}

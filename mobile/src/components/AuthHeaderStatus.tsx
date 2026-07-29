@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
+import ConfirmDialog from './ConfirmDialog';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -21,6 +23,7 @@ export default function AuthHeaderStatus() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
+  const [isLogoutConfirmVisible, setIsLogoutConfirmVisible] = useState(false);
 
   if (!isAuthenticated) {
     return (
@@ -46,9 +49,23 @@ export default function AuthHeaderStatus() {
           {role ? ROLE_LABELS[role] : 'Hesabım'}
         </Text>
       </View>
-      <Pressable onPress={() => logout()} hitSlop={8}>
+      <Pressable onPress={() => setIsLogoutConfirmVisible(true)} hitSlop={8}>
         <Ionicons name="log-out-outline" size={22} color={colors.danger} />
       </Pressable>
+
+      {isLogoutConfirmVisible ? (
+        <ConfirmDialog
+          title="Çıkış Yap"
+          message="Çıkış yapmak istediğinize emin misiniz?"
+          confirmText="Çıkış Yap"
+          isDangerous
+          onConfirm={() => {
+            setIsLogoutConfirmVisible(false);
+            logout();
+          }}
+          onCancel={() => setIsLogoutConfirmVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }

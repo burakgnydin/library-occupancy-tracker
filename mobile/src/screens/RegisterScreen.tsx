@@ -22,6 +22,7 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -30,6 +31,16 @@ export default function RegisterScreen() {
   );
 
   const handleRegister = async () => {
+    // Backend'e hic istek atmadan once, mevcut store.error mekanizmasiyla
+    // (LoginScreen/authStore ile ayni desen) anlik geri bildirim - useAuthStore.setState
+    // burada dogrudan kullaniliyor cunku bu, register() cagrisina baglanmadan
+    // once, salt client-side bir kontrol (authStore'un kendi action'larindan
+    // biri degil).
+    if (password !== confirmPassword) {
+      useAuthStore.setState({ error: 'Şifreler eşleşmiyor.' });
+      return;
+    }
+
     const outcome = await register(fullName.trim(), email.trim(), password);
     if (outcome === 'success') {
       // Libraries her zaman stack'in kokunde - otomatik giris basariliysa
@@ -100,6 +111,17 @@ export default function RegisterScreen() {
               textContentType="newPassword"
               value={password}
               onChangeText={setPassword}
+            />
+
+            <FormInput
+              label="Şifre Tekrar"
+              icon="lock-closed-outline"
+              placeholder="Şifrenizi tekrar girin"
+              isPassword
+              autoCapitalize="none"
+              textContentType="newPassword"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
             />
 
             <View className="mt-2">

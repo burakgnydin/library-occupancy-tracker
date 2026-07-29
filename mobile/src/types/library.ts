@@ -52,5 +52,6 @@ export interface CheckInOutResult {
 
 export interface MyCheckInStatus {
   libraryId: string | null;
+  libraryName: string | null;
   checkedInAt: string | null;
 }
