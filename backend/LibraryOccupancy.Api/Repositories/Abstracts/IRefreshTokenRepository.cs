@@ -8,4 +8,9 @@ public interface IRefreshTokenRepository : IRepository<RefreshToken>
     // did it. Two concurrent callers racing on the same still-valid token can't both succeed —
     // only one UPDATE actually matches "WHERE IsRevoked = 0", the other affects zero rows.
     Task<bool> TryRevokeAsync(Guid id);
+
+    // Periyodik bakim temizligi icin (bkz. RefreshTokenCleanupBackgroundService) - revoke
+    // edilmis veya suresi gecmis token'lari dogrudan SQL DELETE ile siler, donen deger
+    // silinen satir sayisi (loglama icin).
+    Task<int> DeleteExpiredOrRevokedAsync();
 }

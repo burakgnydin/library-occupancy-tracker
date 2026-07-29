@@ -30,7 +30,7 @@ public class LibraryService : ILibraryService
 
     public async Task<LibraryDto> GetByIdAsync(Guid id)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("kütüphane", id);
+        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
         return _mapper.Map<LibraryDto>(library);
     }
 
@@ -39,7 +39,7 @@ public class LibraryService : ILibraryService
         var alreadyExists = await _libraryRepository.ExistsByNameAndAddressAsync(dto.Name, dto.Address);
         if (alreadyExists)
         {
-            throw new ConflictException("A library with this name and address already exists.");
+            throw new ConflictException("A library with this name and address already exists.", ErrorCodes.LibraryNameAddressConflict);
         }
 
         var library = _mapper.Map<Library>(dto);
@@ -56,12 +56,12 @@ public class LibraryService : ILibraryService
 
     public async Task<LibraryDto> UpdateAsync(Guid id, UpdateLibraryDto dto)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("kütüphane", id);
+        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
 
         var alreadyExists = await _libraryRepository.ExistsByNameAndAddressAsync(dto.Name, dto.Address, excludeId: id);
         if (alreadyExists)
         {
-            throw new ConflictException("A library with this name and address already exists.");
+            throw new ConflictException("A library with this name and address already exists.", ErrorCodes.LibraryNameAddressConflict);
         }
 
         // GetByIdAsync zaten bu entity'yi aynı DbContext üzerinde tracked olarak döndürüyor,
@@ -87,13 +87,13 @@ public class LibraryService : ILibraryService
         }
         catch (DbUpdateException)
         {
-            throw new ConflictException("A library with this name and address already exists.");
+            throw new ConflictException("A library with this name and address already exists.", ErrorCodes.LibraryNameAddressConflict);
         }
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("kütüphane", id);
+        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
 
         _libraryRepository.Delete(library);
         await _unitOfWork.SaveChangesAsync();
@@ -101,7 +101,7 @@ public class LibraryService : ILibraryService
 
     public async Task<byte[]> GenerateQrCodeAsync(Guid id)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("kütüphane", id);
+        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
 
         using var qrGenerator = new QRCodeGenerator();
         using var qrCodeData = qrGenerator.CreateQrCode(library.QrCodeToken, QRCodeGenerator.ECCLevel.Q);

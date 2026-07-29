@@ -20,4 +20,13 @@ public class RefreshTokenRepository : RepositoryBase<RefreshToken>, IRefreshToke
 
         return affectedRows > 0;
     }
+
+    public async Task<int> DeleteExpiredOrRevokedAsync()
+    {
+        var now = DateTime.UtcNow;
+
+        return await _dbSet
+            .Where(r => r.IsRevoked || r.ExpiresAt < now)
+            .ExecuteDeleteAsync();
+    }
 }

@@ -10,4 +10,32 @@ public class UserRepository : RepositoryBase<User>, IUserRepository
     {
         return await _dbSet.FirstOrDefaultAsync(u => u.Email == email);
     }
+
+    public async Task<(List<User> Items, int TotalCount)> GetPagedAsync(UserQueryParameters parameters)
+    {
+        var query = _dbSet.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(parameters.Search))
+        {
+            query = query.Where(u =>
+                EF.Functions.Like(u.FullName, $"%{parameters.Search}%") ||
+                EF.Functions.Like(u.Email, $"%{parameters.Search}%"));
+        }
+
+        if (parameters.Role is not null)
+        {
+            query = query.Where(u => u.Role == parameters.Role);
+        }
+
+        query = query.OrderBy(u => u.FullName);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
+            .Skip((parameters.PageNumber - 1) * parameters.PageSize)
+            .Take(parameters.PageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
 }

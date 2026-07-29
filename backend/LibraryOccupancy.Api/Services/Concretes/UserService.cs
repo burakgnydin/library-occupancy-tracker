@@ -13,6 +13,19 @@ public class UserService : IUserService
         _mapper = mapper;
     }
 
+    public async Task<PagedResultDto<UserDto>> GetPagedAsync(UserQueryParameters parameters)
+    {
+        var (items, totalCount) = await _userRepository.GetPagedAsync(parameters);
+
+        return new PagedResultDto<UserDto>
+        {
+            Items = _mapper.Map<List<UserDto>>(items),
+            TotalCount = totalCount,
+            PageNumber = parameters.PageNumber,
+            PageSize = parameters.PageSize
+        };
+    }
+
     public async Task<UserDto> RegisterAsync(RegisterUserDto dto)
     {
         var user = await CreateUserAsync(dto.FullName, dto.Email, dto.Password, UserRole.User);
@@ -23,7 +36,7 @@ public class UserService : IUserService
     {
         if (dto.Role == UserRole.SuperAdmin)
         {
-            throw new ValidationException("Cannot create a SuperAdmin user via this endpoint.");
+            throw new ValidationException("Cannot create a SuperAdmin user via this endpoint.", ErrorCodes.CannotCreateSuperAdmin);
         }
 
         var user = await CreateUserAsync(dto.FullName, dto.Email, dto.Password, dto.Role);
@@ -35,7 +48,7 @@ public class UserService : IUserService
         var existingUser = await _userRepository.GetByEmailAsync(email);
         if (existingUser is not null)
         {
-            throw new ConflictException("Email already registered");
+            throw new ConflictException("Email already registered", ErrorCodes.EmailAlreadyRegistered);
         }
 
         var user = new User
@@ -58,7 +71,7 @@ public class UserService : IUserService
     {
         EnsureSelfOrAdmin(id, requestingUserId, isAdmin);
 
-        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("kullanıcı", id);
+        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("user", id, ErrorCodes.UserNotFound);
         return _mapper.Map<UserDto>(user);
     }
 
@@ -66,10 +79,30 @@ public class UserService : IUserService
     {
         EnsureSelfOrAdmin(id, requestingUserId, isAdmin);
 
-        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("kullanıcı", id);
+        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("user", id, ErrorCodes.UserNotFound);
 
         _mapper.Map(dto, user);
 
+        await _unitOfWork.SaveChangesAsync();
+
+        return _mapper.Map<UserDto>(user);
+    }
+
+    public async Task<UserDto> UpdateRoleAsync(Guid targetUserId, UserRole newRole, Guid requestingUserId)
+    {
+        var user = await _userRepository.GetByIdAsync(targetUserId).GetOrThrowAsync("user", targetUserId, ErrorCodes.UserNotFound);
+
+        // SuperAdmin kendi rolunu degistiremez - aksi halde yanlislikla kendini
+        // Admin/User'a dusurup panelden kendini kilitleyebilir (bkz. asagidaki
+        // DeleteAsync'teki ayni felsefe - tek fark orada isAdmin genel personel
+        // icin gecerliyken, bu endpoint zaten sadece SuperAdminOnly policy'si
+        // arkasinda oldugu icin ek bir rol kontrolune gerek yok).
+        if (targetUserId == requestingUserId)
+        {
+            throw new ForbiddenException("You cannot change your own role.", ErrorCodes.CannotChangeOwnRole);
+        }
+
+        user.Role = newRole;
         await _unitOfWork.SaveChangesAsync();
 
         return _mapper.Map<UserDto>(user);
@@ -79,7 +112,18 @@ public class UserService : IUserService
     {
         EnsureSelfOrAdmin(id, requestingUserId, isAdmin);
 
-        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("kullanıcı", id);
+        // Personel (Admin/SuperAdmin) kendi hesabini bu yoldan silemez -
+        // ozellikle tek SuperAdmin hesabinin yanlislikla silinip sistemin
+        // yoneticisiz kalmasini onlemek icin. Personel olmayan bir kullanicinin
+        // kendi hesabini silmesi (self-service, isAdmin=false yolu) bu kuraldan
+        // etkilenmiyor - sadece StaffOrAbove yetkisiyle gelen cagrilar icin
+        // gecerli.
+        if (isAdmin && id == requestingUserId)
+        {
+            throw new ForbiddenException("You cannot delete your own account.", ErrorCodes.CannotDeleteOwnAccount);
+        }
+
+        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("user", id, ErrorCodes.UserNotFound);
 
         _userRepository.Delete(user);
         await _unitOfWork.SaveChangesAsync();
@@ -89,7 +133,7 @@ public class UserService : IUserService
     {
         if (!isAdmin && id != requestingUserId)
         {
-            throw new ForbiddenException("You can only access your own profile.");
+            throw new ForbiddenException("You can only access your own profile.", ErrorCodes.ProfileAccessDenied);
         }
     }
 }

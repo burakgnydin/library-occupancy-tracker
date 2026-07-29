@@ -27,20 +27,20 @@ public class OccupancyService : IOccupancyService
 
     public async Task<CheckInOutResultDto> CheckInAsync(Guid libraryId, Guid userId, string qrToken)
     {
-        var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("kütüphane", libraryId);
-        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId);
+        var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("library", libraryId, ErrorCodes.LibraryNotFound);
+        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
 
         EnsureQrTokenMatches(library, qrToken);
 
         var latestLog = await _occupancyLogRepository.GetLatestByUserIdAsync(userId);
         if (latestLog is not null && latestLog.Type == OccupancyLogType.CheckIn)
         {
-            throw new ValidationException("You are already checked in at another library. Please check out first.");
+            throw new ValidationException("You are already checked in at another library. Please check out first.", ErrorCodes.AlreadyCheckedIn);
         }
 
         if (library.CurrentOccupancy >= library.Capacity)
         {
-            throw new ValidationException("Library is currently full");
+            throw new ValidationException("Library is currently full", ErrorCodes.LibraryFull);
         }
 
         library.CurrentOccupancy += 1;
@@ -58,25 +58,25 @@ public class OccupancyService : IOccupancyService
 
     public async Task<CheckInOutResultDto> CheckOutAsync(Guid libraryId, Guid userId, string qrToken)
     {
-        var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("kütüphane", libraryId);
-        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId);
+        var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("library", libraryId, ErrorCodes.LibraryNotFound);
+        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
 
         EnsureQrTokenMatches(library, qrToken);
 
         var latestLog = await _occupancyLogRepository.GetLatestByUserIdAsync(userId);
         if (latestLog is null || latestLog.Type != OccupancyLogType.CheckIn)
         {
-            throw new ValidationException("You are not checked in anywhere.");
+            throw new ValidationException("You are not checked in anywhere.", ErrorCodes.NotCheckedIn);
         }
 
         if (latestLog.LibraryId != libraryId)
         {
-            throw new ValidationException("You are checked in at a different library. Please check out from there first.");
+            throw new ValidationException("You are checked in at a different library. Please check out from there first.", ErrorCodes.CheckedInElsewhere);
         }
 
         if (library.CurrentOccupancy <= 0)
         {
-            throw new ValidationException("Occupancy is already zero");
+            throw new ValidationException("Occupancy is already zero", ErrorCodes.OccupancyAlreadyZero);
         }
 
         library.CurrentOccupancy -= 1;
@@ -100,9 +100,12 @@ public class OccupancyService : IOccupancyService
             return new MyCheckInStatusDto();
         }
 
+        var library = await _libraryRepository.GetByIdAsync(latestLog.LibraryId);
+
         return new MyCheckInStatusDto
         {
             LibraryId = latestLog.LibraryId,
+            LibraryName = library?.Name,
             CheckedInAt = latestLog.Timestamp
         };
     }
@@ -129,7 +132,7 @@ public class OccupancyService : IOccupancyService
     {
         if (library.QrCodeToken != qrToken)
         {
-            throw new ValidationException("Invalid QR code for this library.");
+            throw new ValidationException("Invalid QR code for this library.", ErrorCodes.InvalidQrCode);
         }
     }
 

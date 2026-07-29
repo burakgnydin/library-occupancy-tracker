@@ -58,8 +58,14 @@ public static class ServiceCollectionExtensions
         services.AddSignalR()
             .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-        services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlite(BuildSqliteConnectionString(configuration, environment)));
+        // BuildSqliteConnectionString() burada, AddApplicationServices'in disinda DEGIL, TAM
+        // OLARAK BIR KEZ cagrilip sonucu bir local degiskende yakalaniyor - AddDbContext'e
+        // verilen lambda EF Core tarafindan her yeni ApplicationDbContext (yani her request/
+        // scope) olusturuldugunda tekrar calistirilir; BuildSqliteConnectionString'i DOGRUDAN
+        // o lambda'nin icinden cagirmak (onceki hali) fonksiyonun (ve icindeki Console.WriteLine
+        // logunun) sessizce her istekte tekrar tekrar calismasina yol aciyordu.
+        var sqliteConnectionString = BuildSqliteConnectionString(configuration, environment);
+        services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite(sqliteConnectionString));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ILibraryRepository, LibraryRepository>();
@@ -72,6 +78,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
 
         services.Configure<InitialAdminSettings>(configuration.GetSection(InitialAdminSettings.SectionName));
+        services.Configure<RefreshTokenCleanupSettings>(configuration.GetSection(RefreshTokenCleanupSettings.SectionName));
+        services.AddHostedService<RefreshTokenCleanupBackgroundService>();
 
         services.AddJwtAuthentication(configuration);
         services.AddLoginRateLimiting();

@@ -2,7 +2,10 @@ namespace LibraryOccupancy.Api.Services.Exceptions;
 
 public class ValidationException : Exception
 {
-    public ValidationException(string message) : base(message)
+    public string ErrorCode { get; }
+
+    public ValidationException(string message, string errorCode) : base(message)
     {
+        ErrorCode = errorCode;
     }
 }

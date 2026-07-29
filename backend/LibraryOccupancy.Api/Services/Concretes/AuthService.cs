@@ -31,7 +31,7 @@ public class AuthService : IAuthService
         var user = await _userRepository.GetByEmailAsync(dto.Email);
         if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
         {
-            throw new UnauthorizedException("Invalid email or password.");
+            throw new UnauthorizedException("Invalid email or password.", ErrorCodes.InvalidCredentials);
         }
 
         var (accessToken, expiresAt) = GenerateAccessToken(user);
@@ -53,7 +53,7 @@ public class AuthService : IAuthService
         var existingToken = await _refreshTokenRepository.GetByTokenAsync(dto.RefreshToken);
         if (existingToken is null || existingToken.IsRevoked || existingToken.ExpiresAt < DateTime.UtcNow)
         {
-            throw new UnauthorizedException("Invalid or expired refresh token.");
+            throw new UnauthorizedException("Invalid or expired refresh token.", ErrorCodes.InvalidRefreshToken);
         }
 
         // Atomically claim the token (UPDATE ... WHERE IsRevoked = 0) instead of load-then-save.
@@ -63,11 +63,11 @@ public class AuthService : IAuthService
         var claimed = await _refreshTokenRepository.TryRevokeAsync(existingToken.Id);
         if (!claimed)
         {
-            throw new UnauthorizedException("Invalid or expired refresh token.");
+            throw new UnauthorizedException("Invalid or expired refresh token.", ErrorCodes.InvalidRefreshToken);
         }
 
         var user = await _userRepository.GetByIdAsync(existingToken.UserId)
-            ?? throw new UnauthorizedException("Invalid or expired refresh token.");
+            ?? throw new UnauthorizedException("Invalid or expired refresh token.", ErrorCodes.InvalidRefreshToken);
 
         var (accessToken, expiresAt) = GenerateAccessToken(user);
         var (_, rawNewRefreshToken) = CreateRefreshToken(user.Id);
