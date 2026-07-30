@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
+import Badge from './Badge';
 import ConfirmDialog from './ConfirmDialog';
 import Sidebar from './Sidebar';
 import { useAuthStore } from '../store/authStore';
@@ -28,11 +29,7 @@ export default function DashboardLayout({ title, children }: DashboardLayoutProp
           <h1 className="text-base font-semibold text-ink">{title}</h1>
 
           <div className="flex items-center gap-4">
-            {role ? (
-              <span className="rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary">
-                {ROLE_LABELS[role] ?? role}
-              </span>
-            ) : null}
+            {role ? <Badge label={ROLE_LABELS[role] ?? role} color="primary" /> : null}
             <button
               type="button"
               onClick={() => setIsLogoutConfirmOpen(true)}

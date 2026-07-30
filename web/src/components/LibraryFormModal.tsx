@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
+import FormInput from './FormInput';
 import Modal from './Modal';
 import { createLibrary, updateLibrary } from '../services/libraryService';
 import { getApiErrorMessage } from '../utils/apiError';
@@ -55,69 +56,51 @@ export default function LibraryFormModal({ library, onClose, onSuccess }: Librar
     }
   };
 
-  const inputClassName =
-    'rounded-xl border border-border bg-surface px-3.5 py-2.5 text-base text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light';
-
   return (
     <Modal title={isEditMode ? 'Kütüphaneyi Düzenle' : 'Yeni Kütüphane Ekle'} onClose={onClose}>
       <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-          Kütüphane Adı
-          <input
-            required
-            maxLength={200}
-            value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-            className={inputClassName}
-          />
-        </label>
+        <FormInput
+          label="Kütüphane Adı"
+          required
+          maxLength={200}
+          value={form.name}
+          onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+        />
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-          Adres
-          <input
-            required
-            maxLength={300}
-            value={form.address}
-            onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
-            className={inputClassName}
-          />
-        </label>
+        <FormInput
+          label="Adres"
+          required
+          maxLength={300}
+          value={form.address}
+          onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+        />
 
         <div className="grid grid-cols-2 gap-4">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            Şehir
-            <input
-              required
-              maxLength={100}
-              value={form.city}
-              onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
-              className={inputClassName}
-            />
-          </label>
+          <FormInput
+            label="Şehir"
+            required
+            maxLength={100}
+            value={form.city}
+            onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))}
+          />
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            İlçe
-            <input
-              required
-              maxLength={100}
-              value={form.district}
-              onChange={(event) => setForm((prev) => ({ ...prev, district: event.target.value }))}
-              className={inputClassName}
-            />
-          </label>
+          <FormInput
+            label="İlçe"
+            required
+            maxLength={100}
+            value={form.district}
+            onChange={(event) => setForm((prev) => ({ ...prev, district: event.target.value }))}
+          />
         </div>
 
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-          Kapasite
-          <input
-            type="number"
-            required
-            min={1}
-            value={form.capacity}
-            onChange={(event) => setForm((prev) => ({ ...prev, capacity: Number(event.target.value) }))}
-            className={inputClassName}
-          />
-        </label>
+        <FormInput
+          label="Kapasite"
+          type="number"
+          required
+          min={1}
+          value={form.capacity}
+          onChange={(event) => setForm((prev) => ({ ...prev, capacity: Number(event.target.value) }))}
+        />
 
         {error ? (
           <div className="rounded-xl border border-danger bg-danger-light px-3.5 py-2.5 text-sm font-medium text-danger">

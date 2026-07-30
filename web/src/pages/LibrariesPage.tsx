@@ -1,20 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 
+import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DashboardLayout from '../components/DashboardLayout';
 import LibraryFormModal from '../components/LibraryFormModal';
+import Pagination from '../components/Pagination';
 import QrCodeModal from '../components/QrCodeModal';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { usePagedList } from '../hooks/usePagedList';
 import { deleteLibrary, getLibraries } from '../services/libraryService';
 import { getApiErrorMessage } from '../utils/apiError';
-import type { Library, OccupancyStatus } from '../types/library';
+import type { Library, LibraryQueryParams, OccupancyStatus } from '../types/library';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 400;
 
-const OCCUPANCY_STYLES: Record<OccupancyStatus, { label: string; className: string }> = {
-  Low: { label: 'Az yoğun', className: 'border-success bg-success-light text-success' },
-  Medium: { label: 'Orta yoğun', className: 'border-warning bg-warning-light text-warning' },
-  High: { label: 'Çok yoğun', className: 'border-danger bg-danger-light text-danger' },
+const OCCUPANCY_STYLES: Record<OccupancyStatus, { label: string; color: 'success' | 'warning' | 'danger' }> = {
+  Low: { label: 'Az yoğun', color: 'success' },
+  Medium: { label: 'Orta yoğun', color: 'warning' },
+  High: { label: 'Çok yoğun', color: 'danger' },
 };
 
 type FormModalState = { mode: 'create' } | { mode: 'edit'; library: Library } | null;
@@ -23,54 +27,49 @@ export default function LibrariesPage() {
   const [search, setSearch] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
-  const [debouncedFilters, setDebouncedFilters] = useState({ search: '', city: '', district: '' });
+  const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
+  const debouncedCity = useDebouncedValue(city, SEARCH_DEBOUNCE_MS);
+  const debouncedDistrict = useDebouncedValue(district, SEARCH_DEBOUNCE_MS);
 
-  const [items, setItems] = useState<Library[]>([]);
   const [pageNumber, setPageNumber] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [formModal, setFormModal] = useState<FormModalState>(null);
   const [qrModalLibrary, setQrModalLibrary] = useState<Library | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Library | null>(null);
 
-  // Arama/sehir/ilce kutularina yazarken her tusla istek atmamak icin
-  // debounce - LibraryListScreen'deki (mobil) ayni desen.
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedFilters({ search: search.trim(), city: city.trim(), district: district.trim() });
+  // Debounce edilmis filtreler degistiginde ilk sayfaya donmek gerekir (aksi halde
+  // artik var olmayan bir sayfada kalinabilir) - bunu render SIRASINDA (bir useEffect
+  // icinde degil) yapiyoruz ki asagidaki usePagedList, sayfa numarasi 1'e donmeden
+  // ONCE eski sayfa + yeni filtrelerle bosa bir istek atmasin (React'in "render
+  // sirasinda state ayarlama" deseni - bkz. React dokumantasyonu "Adjusting state
+  // when a prop changes"). Sadece rol filtresi gibi debounce edilmeyen alanlar icin
+  // (StaffPage'deki gibi) bu senkron olarak zaten dogrudan onChange'te yapilabilir;
+  // debounce edilen alanlar icin bu render-zamani duzeltmesi gerekiyor.
+  const filterKey = `${debouncedSearch}|${debouncedCity}|${debouncedDistrict}`;
+  const prevFilterKeyRef = useRef(filterKey);
+  if (prevFilterKeyRef.current !== filterKey) {
+    prevFilterKeyRef.current = filterKey;
+    if (pageNumber !== 1) {
       setPageNumber(1);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeoutId);
-  }, [search, city, district]);
-
-  const fetchLibraries = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const result = await getLibraries({
-        search: debouncedFilters.search || undefined,
-        city: debouncedFilters.city || undefined,
-        district: debouncedFilters.district || undefined,
-        pageNumber,
-        pageSize: PAGE_SIZE,
-      });
-      setItems(result.items);
-      setTotalPages(result.totalPages);
-      setTotalCount(result.totalCount);
-    } catch (err) {
-      setError(getApiErrorMessage(err, 'Kütüphaneler yüklenemedi.'));
-    } finally {
-      setIsLoading(false);
     }
-  }, [debouncedFilters, pageNumber]);
+  }
 
-  useEffect(() => {
-    fetchLibraries();
-  }, [fetchLibraries]);
+  const params: LibraryQueryParams = {
+    search: debouncedSearch.trim() || undefined,
+    city: debouncedCity.trim() || undefined,
+    district: debouncedDistrict.trim() || undefined,
+    pageNumber,
+    pageSize: PAGE_SIZE,
+  };
+
+  const {
+    data: items,
+    isLoading,
+    error,
+    totalPages,
+    totalCount,
+    refetch: fetchLibraries,
+  } = usePagedList(getLibraries, params, 'Kütüphaneler yüklenemedi.');
 
   const handleFormSuccess = () => {
     setFormModal(null);
@@ -100,32 +99,7 @@ export default function LibrariesPage() {
   };
 
   const paginationControls = (
-    <div className="flex items-center justify-between px-1 py-3">
-      <p className="text-sm text-ink-muted">
-        Toplam <span className="font-semibold text-ink">{totalCount}</span> kütüphane
-      </p>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          disabled={pageNumber <= 1}
-          onClick={() => setPageNumber((prev) => prev - 1)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-muted transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Önceki
-        </button>
-        <span className="text-sm font-medium text-ink">
-          Sayfa {pageNumber} / {totalPages}
-        </span>
-        <button
-          type="button"
-          disabled={pageNumber >= totalPages}
-          onClick={() => setPageNumber((prev) => prev + 1)}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-muted transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Sonraki
-        </button>
-      </div>
-    </div>
+    <Pagination currentPage={pageNumber} totalPages={totalPages} totalCount={totalCount} onPageChange={setPageNumber} itemLabel="kütüphane" />
   );
 
   return (
@@ -162,7 +136,7 @@ export default function LibrariesPage() {
           </button>
         </div>
 
-        <div className="px-5">{paginationControls}</div>
+        {paginationControls}
 
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
@@ -214,9 +188,7 @@ export default function LibrariesPage() {
                       </td>
                       <td className="px-5 py-3.5 text-ink-muted">{library.capacity}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${status.className}`}>
-                          %{library.occupancyPercentage} · {status.label}
-                        </span>
+                        <Badge label={`%${library.occupancyPercentage} · ${status.label}`} color={status.color} />
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex justify-end gap-2">
@@ -251,7 +223,7 @@ export default function LibrariesPage() {
           </table>
         </div>
 
-        <div className="px-5">{paginationControls}</div>
+        {paginationControls}
       </div>
 
       {formModal ? (

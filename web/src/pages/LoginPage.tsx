@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
+import FormInput from '../components/FormInput';
 import { useAuthStore } from '../store/authStore';
 
 export default function LoginPage() {
@@ -61,29 +62,23 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-ink-muted">Devam etmek için hesap bilgilerinizi girin.</p>
 
           <form className="mt-8 flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              E-posta
-              <input
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="rounded-xl border border-border bg-surface px-3.5 py-2.5 text-base text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
-              />
-            </label>
+            <FormInput
+              label="E-posta"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
 
-            <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-              Şifre
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="rounded-xl border border-border bg-surface px-3.5 py-2.5 text-base text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
-              />
-            </label>
+            <FormInput
+              label="Şifre"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
 
             {error ? (
               <div className="rounded-xl border border-danger bg-danger-light px-3.5 py-2.5 text-sm font-medium text-danger">

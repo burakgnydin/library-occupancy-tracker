@@ -1,22 +1,27 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DashboardLayout from '../components/DashboardLayout';
+import FormInput from '../components/FormInput';
+import Pagination from '../components/Pagination';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { usePagedList } from '../hooks/usePagedList';
 import { createStaff, deleteUser, getUsers, updateUserRole } from '../services/userService';
 import { useAuthStore } from '../store/authStore';
 import { getApiErrorMessage } from '../utils/apiError';
 import type { UserRole } from '../types/auth';
 import { ROLE_LABELS } from '../types/auth';
-import type { StaffRole, User } from '../types/user';
+import type { StaffRole, User, UserQueryParams } from '../types/user';
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 400;
 
-const ROLE_BADGE_CLASSNAME: Record<UserRole, string> = {
-  SuperAdmin: 'border-accent bg-accent-light text-accent',
-  Admin: 'border-primary bg-primary-light text-primary',
-  User: 'border-border bg-background text-ink-muted',
+const ROLE_BADGE_COLOR: Record<UserRole, 'accent' | 'primary' | 'neutral'> = {
+  SuperAdmin: 'accent',
+  Admin: 'primary',
+  User: 'neutral',
 };
 
 const emptyForm = {
@@ -35,47 +40,37 @@ export default function StaffPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
-  const [items, setItems] = useState<User[]>([]);
   const [pageNumber, setPageNumber] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [isLoadingList, setIsLoadingList] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setDebouncedSearch(search.trim());
+  // Debounce edilen arama alani icin, filtre gercekten degistiginde ilk sayfaya
+  // render SIRASINDA donuyoruz (bkz. LibrariesPage'deki ayni desen/yorum) - rol
+  // filtresi debounce edilmedigi icin kendi onChange'inde zaten senkron sifirlaniyor.
+  const prevDebouncedSearchRef = useRef(debouncedSearch);
+  if (prevDebouncedSearchRef.current !== debouncedSearch) {
+    prevDebouncedSearchRef.current = debouncedSearch;
+    if (pageNumber !== 1) {
       setPageNumber(1);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeoutId);
-  }, [search]);
-
-  const fetchUsers = useCallback(async () => {
-    setIsLoadingList(true);
-    setListError(null);
-    try {
-      const result = await getUsers({
-        search: debouncedSearch || undefined,
-        role: roleFilter || undefined,
-        pageNumber,
-        pageSize: PAGE_SIZE,
-      });
-      setItems(result.items);
-      setTotalPages(result.totalPages);
-      setTotalCount(result.totalCount);
-    } catch (err) {
-      setListError(getApiErrorMessage(err, 'Kullanıcılar yüklenemedi.'));
-    } finally {
-      setIsLoadingList(false);
     }
-  }, [debouncedSearch, roleFilter, pageNumber]);
+  }
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  const params: UserQueryParams = {
+    search: debouncedSearch.trim() || undefined,
+    role: roleFilter || undefined,
+    pageNumber,
+    pageSize: PAGE_SIZE,
+  };
+
+  const {
+    data: items,
+    isLoading: isLoadingList,
+    error: listError,
+    totalPages,
+    totalCount,
+    refetch: fetchUsers,
+  } = usePagedList(getUsers, params, 'Kullanıcılar yüklenemedi.');
 
   // Hangi satirin islemi (rol degistirme/silme) su an surdugunu tutar - ayni
   // anda sadece o satirin dropdown'u/butonu devre disi kalir, tum tabloyu
@@ -88,7 +83,7 @@ export default function StaffPage() {
     setProcessingUserId(user.id);
     try {
       await updateUserRole(user.id, newRole);
-      await fetchUsers();
+      fetchUsers();
     } catch (err) {
       // Normalde UI zaten kendi hesabina bu islemi hic sunmuyor (dropdown
       // devre disi) - ama backend'in kendi 403 korumasi (UpdateRoleAsync)
@@ -111,7 +106,7 @@ export default function StaffPage() {
       if (items.length === 1 && pageNumber > 1) {
         setPageNumber((prev) => prev - 1);
       } else {
-        await fetchUsers();
+        fetchUsers();
       }
     } catch (err) {
       window.alert(getApiErrorMessage(err, 'Kullanıcı silinemedi.'));
@@ -150,43 +145,34 @@ export default function StaffPage() {
         </p>
 
         <form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            Ad Soyad
-            <input
-              required
-              maxLength={200}
-              value={form.fullName}
-              onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
-              className={inputClassName}
-            />
-          </label>
+          <FormInput
+            label="Ad Soyad"
+            required
+            maxLength={200}
+            value={form.fullName}
+            onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
+          />
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            E-posta
-            <input
-              type="email"
-              required
-              maxLength={256}
-              autoComplete="off"
-              value={form.email}
-              onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
-              className={inputClassName}
-            />
-          </label>
+          <FormInput
+            label="E-posta"
+            type="email"
+            required
+            maxLength={256}
+            autoComplete="off"
+            value={form.email}
+            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+          />
 
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
-            Şifre
-            <input
-              type="password"
-              required
-              minLength={6}
-              maxLength={72}
-              autoComplete="new-password"
-              value={form.password}
-              onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-              className={inputClassName}
-            />
-          </label>
+          <FormInput
+            label="Şifre"
+            type="password"
+            required
+            minLength={6}
+            maxLength={72}
+            autoComplete="new-password"
+            value={form.password}
+            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+          />
 
           <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
             Rol
@@ -248,32 +234,7 @@ export default function StaffPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-5 py-3">
-          <p className="text-sm text-ink-muted">
-            Toplam <span className="font-semibold text-ink">{totalCount}</span> kullanıcı
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={pageNumber <= 1}
-              onClick={() => setPageNumber((prev) => prev - 1)}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-muted transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Önceki
-            </button>
-            <span className="text-sm font-medium text-ink">
-              Sayfa {pageNumber} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={pageNumber >= totalPages}
-              onClick={() => setPageNumber((prev) => prev + 1)}
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-ink-muted transition hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Sonraki
-            </button>
-          </div>
-        </div>
+        <Pagination currentPage={pageNumber} totalPages={totalPages} totalCount={totalCount} onPageChange={setPageNumber} itemLabel="kullanıcı" />
 
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm">
@@ -321,9 +282,7 @@ export default function StaffPage() {
                       <td className="px-5 py-3.5 font-medium text-ink">{user.fullName}</td>
                       <td className="px-5 py-3.5 text-ink-muted">{user.email}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${ROLE_BADGE_CLASSNAME[user.role]}`}>
-                          {ROLE_LABELS[user.role]}
-                        </span>
+                        <Badge label={ROLE_LABELS[user.role]} color={ROLE_BADGE_COLOR[user.role]} />
                       </td>
                       <td className="px-5 py-3.5 text-ink-muted">
                         {new Date(user.createdAt).toLocaleDateString('tr-TR')}
