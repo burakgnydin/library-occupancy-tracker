@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LibraryOccupancy.Api.Controllers;
 
@@ -72,6 +73,7 @@ public class LibrariesController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting(LibraryOccupancy.Api.Extensions.ServiceCollectionExtensions.CheckInOutRateLimitPolicy)]
     [HttpPost("{id:guid}/checkin")]
     public async Task<ActionResult<CheckInOutResultDto>> CheckIn(Guid id, [FromBody] CheckInRequestDto dto)
     {
@@ -80,6 +82,7 @@ public class LibrariesController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting(LibraryOccupancy.Api.Extensions.ServiceCollectionExtensions.CheckInOutRateLimitPolicy)]
     [HttpPost("{id:guid}/checkout")]
     public async Task<ActionResult<CheckInOutResultDto>> CheckOut(Guid id, [FromBody] CheckOutRequestDto dto)
     {

@@ -8,7 +8,7 @@ public class LibraryRepository : RepositoryBase<Library>, ILibraryRepository
 
     public async Task<(List<Library> Items, int TotalCount)> GetPagedAsync(LibraryQueryParameters parameters)
     {
-        var query = _dbSet.AsNoTracking().AsQueryable();
+        var query = Set.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(parameters.Search))
         {
@@ -47,7 +47,7 @@ public class LibraryRepository : RepositoryBase<Library>, ILibraryRepository
 
     public async Task<bool> ExistsByNameAndAddressAsync(string name, string address, Guid? excludeId = null)
     {
-        return await _dbSet.AnyAsync(l =>
+        return await Set.AnyAsync(l =>
             l.Name == name && l.Address == address && (excludeId == null || l.Id != excludeId));
     }
 }

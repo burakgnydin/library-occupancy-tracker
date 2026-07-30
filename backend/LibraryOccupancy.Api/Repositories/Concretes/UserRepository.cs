@@ -8,12 +8,12 @@ public class UserRepository : RepositoryBase<User>, IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        return await _dbSet.FirstOrDefaultAsync(u => u.Email == email);
+        return await Set.FirstOrDefaultAsync(u => u.Email == email);
     }
 
     public async Task<(List<User> Items, int TotalCount)> GetPagedAsync(UserQueryParameters parameters)
     {
-        var query = _dbSet.AsNoTracking().AsQueryable();
+        var query = Set.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(parameters.Search))
         {

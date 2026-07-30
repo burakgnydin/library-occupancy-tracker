@@ -101,12 +101,10 @@ public class AuthService : IAuthService
 
         var refreshToken = new RefreshToken
         {
-            Id = Guid.NewGuid(),
             Token = RefreshTokenHasher.Hash(rawToken),
             UserId = userId,
             ExpiresAt = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpiryDays),
-            IsRevoked = false,
-            CreatedAt = DateTime.UtcNow
+            IsRevoked = false
         };
 
         _refreshTokenRepository.Add(refreshToken);

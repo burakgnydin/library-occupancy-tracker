@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace LibraryOccupancy.Api.Services.Concretes;
 
 public class OccupancyService : IOccupancyService
@@ -28,7 +31,7 @@ public class OccupancyService : IOccupancyService
     public async Task<CheckInOutResultDto> CheckInAsync(Guid libraryId, Guid userId, string qrToken)
     {
         var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("library", libraryId, ErrorCodes.LibraryNotFound);
-        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
+        await _userRepository.GetByIdNoTrackingAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
 
         EnsureQrTokenMatches(library, qrToken);
 
@@ -59,7 +62,7 @@ public class OccupancyService : IOccupancyService
     public async Task<CheckInOutResultDto> CheckOutAsync(Guid libraryId, Guid userId, string qrToken)
     {
         var library = await _libraryRepository.GetByIdAsync(libraryId).GetOrThrowAsync("library", libraryId, ErrorCodes.LibraryNotFound);
-        await _userRepository.GetByIdAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
+        await _userRepository.GetByIdNoTrackingAsync(userId).GetOrThrowAsync("user", userId, ErrorCodes.UserNotFound);
 
         EnsureQrTokenMatches(library, qrToken);
 
@@ -100,7 +103,7 @@ public class OccupancyService : IOccupancyService
             return new MyCheckInStatusDto();
         }
 
-        var library = await _libraryRepository.GetByIdAsync(latestLog.LibraryId);
+        var library = await _libraryRepository.GetByIdNoTrackingAsync(latestLog.LibraryId);
 
         return new MyCheckInStatusDto
         {
@@ -130,21 +133,33 @@ public class OccupancyService : IOccupancyService
 
     private static void EnsureQrTokenMatches(Library library, string qrToken)
     {
-        if (library.QrCodeToken != qrToken)
+        if (!QrTokensMatch(library.QrCodeToken, qrToken))
         {
             throw new ValidationException("Invalid QR code for this library.", ErrorCodes.InvalidQrCode);
         }
+    }
+
+    // Timing-safe comparison (CryptographicOperations.FixedTimeEquals) instead of plain string
+    // equality - a naive != short-circuits on the first mismatching byte, and the resulting
+    // timing difference is (in principle) enough for an attacker to guess a valid QR token one
+    // byte at a time. The length check below returns early on mismatch, but leaking length alone
+    // isn't meaningful here (every token is a fixed-length GUID string).
+    private static bool QrTokensMatch(string expected, string actual)
+    {
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+        var actualBytes = Encoding.UTF8.GetBytes(actual);
+
+        return expectedBytes.Length == actualBytes.Length &&
+            CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
     }
 
     private static OccupancyLog CreateLog(Guid libraryId, Guid userId, OccupancyLogType type)
     {
         return new OccupancyLog
         {
-            Id = Guid.NewGuid(),
             LibraryId = libraryId,
             UserId = userId,
-            Type = type,
-            Timestamp = DateTime.UtcNow
+            Type = type
         };
     }
 

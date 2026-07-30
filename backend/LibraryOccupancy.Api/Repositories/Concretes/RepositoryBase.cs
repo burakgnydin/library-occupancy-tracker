@@ -2,7 +2,12 @@ namespace LibraryOccupancy.Api.Repositories.Concretes;
 
 public class RepositoryBase<TEntity> : IRepository<TEntity> where TEntity : class
 {
-    protected readonly DbSet<TEntity> _dbSet;
+    private readonly DbSet<TEntity> _dbSet;
+
+    // Exposes only the DbSet itself to derived repositories (not the private field), keeping
+    // CA1051 happy without hiding query capability they legitimately need for their own
+    // entity-specific queries (GetPagedAsync, ExistsByNameAndAddressAsync, etc.).
+    protected DbSet<TEntity> Set => _dbSet;
 
     public RepositoryBase(ApplicationDbContext context)
     {
@@ -16,11 +21,20 @@ public class RepositoryBase<TEntity> : IRepository<TEntity> where TEntity : clas
 
     // Tracked olarak dönüyor (AsNoTracking yok) çünkü Update/Delete akışları aynı DbContext
     // içinde bu entity'yi mutasyona uğratıp SaveChanges bekliyor. Salt-okuma senaryolarında
-    // (örn. GetById endpoint'i) bu, gereksiz bir tracking maliyeti getirir; ölçek büyürse
-    // ayrı bir no-tracking varyantı eklenebilir.
+    // (örn. GetById endpoint'i) GetByIdNoTrackingAsync kullanılmalı.
     public async Task<TEntity?> GetByIdAsync(Guid id)
     {
         return await _dbSet.FindAsync(id);
+    }
+
+    public async Task<TEntity?> GetByIdNoTrackingAsync(Guid id)
+    {
+        return await _dbSet.AsNoTracking().FirstOrDefaultAsync(e => EF.Property<Guid>(e, "Id") == id);
+    }
+
+    public async Task<bool> ExistsAsync(Guid id)
+    {
+        return await _dbSet.AnyAsync(e => EF.Property<Guid>(e, "Id") == id);
     }
 
     public void Add(TEntity entity)

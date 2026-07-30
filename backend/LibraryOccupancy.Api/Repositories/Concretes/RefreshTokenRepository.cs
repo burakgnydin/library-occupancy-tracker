@@ -9,12 +9,12 @@ public class RefreshTokenRepository : RepositoryBase<RefreshToken>, IRefreshToke
     public async Task<RefreshToken?> GetByTokenAsync(string token)
     {
         var hashedToken = RefreshTokenHasher.Hash(token);
-        return await _dbSet.FirstOrDefaultAsync(r => r.Token == hashedToken);
+        return await Set.FirstOrDefaultAsync(r => r.Token == hashedToken);
     }
 
     public async Task<bool> TryRevokeAsync(Guid id)
     {
-        var affectedRows = await _dbSet
+        var affectedRows = await Set
             .Where(r => r.Id == id && !r.IsRevoked)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.IsRevoked, true));
 
@@ -25,7 +25,7 @@ public class RefreshTokenRepository : RepositoryBase<RefreshToken>, IRefreshToke
     {
         var now = DateTime.UtcNow;
 
-        return await _dbSet
+        return await Set
             .Where(r => r.IsRevoked || r.ExpiresAt < now)
             .ExecuteDeleteAsync();
     }

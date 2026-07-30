@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -15,6 +16,7 @@ namespace LibraryOccupancy.Api.Extensions;
 public static class ServiceCollectionExtensions
 {
     public const string LoginRateLimitPolicy = "login";
+    public const string CheckInOutRateLimitPolicy = "checkinout";
     public const string CorsPolicyName = "AllowFrontend";
 
     public static WebApplicationBuilder ConfigureSerilog(this WebApplicationBuilder builder)
@@ -38,15 +40,21 @@ public static class ServiceCollectionExtensions
                 // Automatic [ApiController] model-state validation otherwise returns ASP.NET Core's
                 // own ValidationProblemDetails shape ({"type":...,"errors":{...}}), a different
                 // contract than every other error in this API (ExceptionHandlingMiddleware's
-                // {"message":"..."}). Reformat it to match so clients only ever handle one shape.
+                // {"message":"..."}), with the raw English DataAnnotations message inside. Reformat
+                // to the same {"message":"..."} shape AND translate via ValidationMessageFormatter
+                // so clients only ever handle one shape and one language.
                 options.InvalidModelStateResponseFactory = context =>
                 {
-                    var firstError = context.ModelState.Values
-                        .SelectMany(v => v.Errors)
-                        .Select(e => e.ErrorMessage)
-                        .FirstOrDefault() ?? "Invalid request.";
+                    var firstEntry = context.ModelState
+                        .Where(kvp => kvp.Value is { Errors.Count: > 0 })
+                        .Select(kvp => (Field: kvp.Key, Error: kvp.Value!.Errors[0].ErrorMessage))
+                        .FirstOrDefault();
 
-                    return new BadRequestObjectResult(new { message = firstError });
+                    var message = firstEntry.Error is null
+                        ? "Geçersiz istek."
+                        : ValidationMessageFormatter.Format(firstEntry.Field, firstEntry.Error);
+
+                    return new BadRequestObjectResult(new { message });
                 };
             });
         services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecuritySchemeTransformer>());
@@ -82,7 +90,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RefreshTokenCleanupBackgroundService>();
 
         services.AddJwtAuthentication(configuration);
-        services.AddLoginRateLimiting();
+        services.AddRateLimiting();
         services.AddFrontendCors(configuration, environment);
 
         return services;
@@ -107,7 +115,11 @@ public static class ServiceCollectionExtensions
 
     // Brute-force guard for /api/auth/login: 5 attempts per minute per client IP, no queueing
     // (a 6th attempt within the window is rejected immediately with 429, not delayed).
-    private static IServiceCollection AddLoginRateLimiting(this IServiceCollection services)
+    //
+    // Check-in/check-out get their own, more permissive policy partitioned by user id rather
+    // than IP - these endpoints require auth, and multiple users can legitimately share an IP
+    // (NAT/campus wifi), which would otherwise let one user exhaust the whole IP's budget.
+    private static IServiceCollection AddRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
         {
@@ -119,6 +131,16 @@ public static class ServiceCollectionExtensions
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 5,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+
+            options.AddPolicy(CheckInOutRateLimitPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown",
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 15,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));

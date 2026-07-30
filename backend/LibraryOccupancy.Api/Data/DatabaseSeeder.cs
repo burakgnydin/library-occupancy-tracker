@@ -2,6 +2,11 @@ using Microsoft.Extensions.Options;
 
 namespace LibraryOccupancy.Api.Data;
 
+// Intentionally bypasses the Unit of Work pattern (no IUnitOfWork/IRepository<T> — writes
+// straight through ApplicationDbContext.Add + SaveChangesAsync). Seeding runs once at
+// application startup, outside the normal controller → service → repository request
+// pipeline that the UoW pattern exists to coordinate, so this deviation is acceptable here
+// and shouldn't be copied into request-handling code.
 public static class DatabaseSeeder
 {
     public static async Task SeedInitialAdminAsync(this WebApplication app)
@@ -24,12 +29,10 @@ public static class DatabaseSeeder
 
         dbContext.Users.Add(new User
         {
-            Id = Guid.NewGuid(),
             FullName = settings.FullName,
             Email = settings.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(settings.Password),
-            Role = UserRole.SuperAdmin,
-            CreatedAt = DateTime.UtcNow
+            Role = UserRole.SuperAdmin
         });
 
         await dbContext.SaveChangesAsync();

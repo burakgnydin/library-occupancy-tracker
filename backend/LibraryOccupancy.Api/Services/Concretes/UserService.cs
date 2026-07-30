@@ -53,12 +53,10 @@ public class UserService : IUserService
 
         var user = new User
         {
-            Id = Guid.NewGuid(),
             FullName = fullName,
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            Role = role,
-            CreatedAt = DateTime.UtcNow
+            Role = role
         };
 
         _userRepository.Add(user);
@@ -71,7 +69,7 @@ public class UserService : IUserService
     {
         EnsureSelfOrAdmin(id, requestingUserId, isAdmin);
 
-        var user = await _userRepository.GetByIdAsync(id).GetOrThrowAsync("user", id, ErrorCodes.UserNotFound);
+        var user = await _userRepository.GetByIdNoTrackingAsync(id).GetOrThrowAsync("user", id, ErrorCodes.UserNotFound);
         return _mapper.Map<UserDto>(user);
     }
 

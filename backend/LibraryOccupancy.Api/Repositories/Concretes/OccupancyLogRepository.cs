@@ -8,7 +8,7 @@ public class OccupancyLogRepository : RepositoryBase<OccupancyLog>, IOccupancyLo
 
     public async Task<OccupancyLog?> GetLatestByUserIdAsync(Guid userId)
     {
-        return await _dbSet
+        return await Set
             .Where(log => log.UserId == userId)
             .OrderByDescending(log => log.Timestamp)
             .FirstOrDefaultAsync();

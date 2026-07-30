@@ -30,7 +30,7 @@ public class LibraryService : ILibraryService
 
     public async Task<LibraryDto> GetByIdAsync(Guid id)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
+        var library = await _libraryRepository.GetByIdNoTrackingAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
         return _mapper.Map<LibraryDto>(library);
     }
 
@@ -43,10 +43,8 @@ public class LibraryService : ILibraryService
         }
 
         var library = _mapper.Map<Library>(dto);
-        library.Id = Guid.NewGuid();
         library.QrCodeToken = Guid.NewGuid().ToString();
         library.CurrentOccupancy = 0;
-        library.CreatedAt = DateTime.UtcNow;
 
         _libraryRepository.Add(library);
         await SaveChangesGuardingUniquenessAsync();
@@ -101,7 +99,7 @@ public class LibraryService : ILibraryService
 
     public async Task<byte[]> GenerateQrCodeAsync(Guid id)
     {
-        var library = await _libraryRepository.GetByIdAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
+        var library = await _libraryRepository.GetByIdNoTrackingAsync(id).GetOrThrowAsync("library", id, ErrorCodes.LibraryNotFound);
 
         using var qrGenerator = new QRCodeGenerator();
         using var qrCodeData = qrGenerator.CreateQrCode(library.QrCodeToken, QRCodeGenerator.ECCLevel.Q);
