@@ -8,7 +8,7 @@ import {
 } from '../services/apiClient';
 import * as authService from '../services/authService';
 import { secureStorage } from '../services/secureStorage';
-import type { UserRole } from '../types/auth';
+import type { AuthResponse, UserRole } from '../types/auth';
 import { getApiErrorMessage } from '../utils/apiError';
 
 const ROLE_KEY = 'authRole';
@@ -18,11 +18,7 @@ const FALLBACK_MESSAGES = {
   register: 'Kayıt oluşturulamadı. Lütfen tekrar deneyin.',
 } as const;
 
-interface Session {
-  accessToken: string;
-  refreshToken: string;
-  role: UserRole;
-}
+type Session = Pick<AuthResponse, 'accessToken' | 'refreshToken' | 'role'>;
 
 export type RegisterOutcome = 'success' | 'registered-but-login-failed' | 'failed';
 

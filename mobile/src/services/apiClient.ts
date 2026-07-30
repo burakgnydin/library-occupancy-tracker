@@ -2,13 +2,17 @@ import axios, { AxiosError, InternalAxiosRequestConfig, isAxiosError } from 'axi
 
 import { secureStorage } from './secureStorage';
 import { resolveApiBaseUrl } from '../utils/apiBaseUrl';
-import type { AuthResponse, RefreshRequest } from '../types/auth';
+import type { AuthResponse } from '../types/auth';
 
 export const ACCESS_TOKEN_KEY = 'accessToken';
 export const REFRESH_TOKEN_KEY = 'refreshToken';
 
 const REQUEST_TIMEOUT_MS = 15000;
 const REFRESH_TIMEOUT_MS = 10000;
+// isRefreshCall karsilastirmasinda tam path esitligi icin (bkz. asagisi) - bir substring
+// kontrolu ("includes") yanlislikla /auth/refresh ile baslayan/iceren baska bir endpoint'i
+// de (ileride eklenebilir) refresh cagrisi sanabilirdi.
+const REFRESH_PATH = '/auth/refresh';
 
 const apiClient = axios.create({
   baseURL: resolveApiBaseUrl(),
@@ -36,7 +40,7 @@ export function registerUnauthorizedHandler(handler: UnauthorizedHandler) {
 apiClient.interceptors.request.use(async (config) => {
   const accessToken = await secureStorage.getItem(ACCESS_TOKEN_KEY);
   if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+    config.headers.set('Authorization', `Bearer ${accessToken}`);
   }
   return config;
 });
@@ -62,7 +66,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as RetriableRequestConfig | undefined;
-    const isRefreshCall = originalRequest?.url?.includes('/auth/refresh');
+    const isRefreshCall = originalRequest?.url === REFRESH_PATH;
 
     if (error.response?.status !== 401 || !originalRequest || originalRequest._retry || isRefreshCall) {
       return Promise.reject(error);
@@ -77,7 +81,7 @@ apiClient.interceptors.response.use(
             reject(error);
             return;
           }
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          originalRequest.headers.set('Authorization', `Bearer ${accessToken}`);
           resolve(apiClient(originalRequest));
         });
       });
@@ -93,10 +97,14 @@ apiClient.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      const payload: RefreshRequest = { refreshToken };
-      const { data } = await apiClient.post<AuthResponse>('/auth/refresh', payload, {
-        timeout: REFRESH_TIMEOUT_MS,
-      });
+      // Dinamik import kasitli: authService.ts zaten apiClient'i (bu dosyayi) import
+      // ediyor - burada UST DUZEYDE (top-level) bir authService import'u apiClient <->
+      // authService arasinda modul-yukleme zamaninda dongusel bir bagimlilik olustururdu
+      // (bkz. authStore.ts'teki ayni felsefeyle apiClient<->authStore dongusunden kacinma
+      // yorumu). Dinamik import bu cagriyi modul grafi tamamen yuklendikten SONRAYA
+      // erteler - zaten async bir fonksiyonun icindeyiz, ek maliyeti yok.
+      const { refresh } = await import('./authService');
+      const data = await refresh(refreshToken, { timeout: REFRESH_TIMEOUT_MS });
 
       await onSessionRefreshed?.({
         accessToken: data.accessToken,
@@ -105,7 +113,7 @@ apiClient.interceptors.response.use(
       });
 
       resolvePendingRequests(data.accessToken);
-      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+      originalRequest.headers.set('Authorization', `Bearer ${data.accessToken}`);
       return apiClient(originalRequest);
     } catch (refreshError) {
       resolvePendingRequests(null);

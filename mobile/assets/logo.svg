@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="circleGradient" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#7DD3FC"/>
+      <stop offset="55%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </radialGradient>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Arka plan: lacivert, hafif yuvarlatilmis kose (app icon konvansiyonu) -->
+  <rect x="0" y="0" width="512" height="512" rx="96" fill="#1E293B"/>
+
+  <!-- Marka isareti: beyaz ayrac ("]" bicimli konum/checkpoint isareti) + gokyuzu mavisi
+       daire uzerinde soluk lacivert "%" - dolulugu/yer isaretlemeyi cagristiran TraKutup
+       sembolu. Orijinal 150x150 referans tasarimin, oranlari korunarak 512x512'e olceklenmis
+       ve hafif detaylandirilmis (radyal gradyan + yumusak golge) hali. -->
+  <g transform="translate(256,273)" filter="url(#softShadow)">
+    <path d="M-61 -137 L61 -137 L61 137 L0 82 L-61 137 Z" fill="#FFFFFF"/>
+    <circle cx="0" cy="-34" r="41" fill="url(#circleGradient)"/>
+    <text x="0" y="-20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="600" fill="#1E293B" opacity="0.6">%</text>
+  </g>
+</svg>

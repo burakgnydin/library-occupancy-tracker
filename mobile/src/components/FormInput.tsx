@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,7 +11,7 @@ interface FormInputProps extends TextInputProps {
   isPassword?: boolean;
 }
 
-export default function FormInput({ label, icon, error, isPassword, ...textInputProps }: FormInputProps) {
+function FormInput({ label, icon, error, isPassword, ...textInputProps }: FormInputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [isSecure, setIsSecure] = useState(Boolean(isPassword));
 
@@ -21,7 +21,7 @@ export default function FormInput({ label, icon, error, isPassword, ...textInput
   return (
     <View className="mb-4">
       <Text className="mb-1.5 text-sm font-medium text-ink">{label}</Text>
-      <View className={`h-[52px] flex-row items-center rounded-xl border bg-surface px-3.5 ${borderColorClass}`}>
+      <View className={`h-control flex-row items-center rounded-xl border bg-surface px-3.5 ${borderColorClass}`}>
         <Ionicons name={icon} size={20} color={iconColor} />
         <TextInput
           {...textInputProps}
@@ -47,3 +47,5 @@ export default function FormInput({ label, icon, error, isPassword, ...textInput
     </View>
   );
 }
+
+export default memo(FormInput);

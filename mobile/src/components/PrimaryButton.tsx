@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ActivityIndicator, Pressable, PressableProps, Text } from 'react-native';
 
 import { colors } from '../theme/colors';
@@ -7,14 +8,14 @@ interface PrimaryButtonProps extends PressableProps {
   loading?: boolean;
 }
 
-export default function PrimaryButton({ label, loading, disabled, ...pressableProps }: PrimaryButtonProps) {
+function PrimaryButton({ label, loading, disabled, ...pressableProps }: PrimaryButtonProps) {
   const isDisabled = Boolean(disabled || loading);
 
   return (
     <Pressable
       {...pressableProps}
       disabled={isDisabled}
-      className={`h-[52px] flex-row items-center justify-center rounded-xl bg-primary active:bg-primary-dark ${
+      className={`h-control flex-row items-center justify-center rounded-xl bg-primary active:bg-primary-dark ${
         isDisabled ? 'opacity-60' : ''
       }`}
       style={{
@@ -25,7 +26,9 @@ export default function PrimaryButton({ label, loading, disabled, ...pressablePr
         elevation: 3,
       }}
     >
-      {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text className="text-base font-semibold text-white">{label}</Text>}
+      {loading ? <ActivityIndicator color={colors.surface} /> : <Text className="text-base font-semibold text-surface">{label}</Text>}
     </Pressable>
   );
 }
+
+export default memo(PrimaryButton);

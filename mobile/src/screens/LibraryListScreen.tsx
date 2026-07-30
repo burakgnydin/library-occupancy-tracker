@@ -1,27 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   ListRenderItemInfo,
   Pressable,
   RefreshControl,
+  StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import ActiveCheckInBanner from '../components/ActiveCheckInBanner';
+import IconBadge from '../components/IconBadge';
 import LibraryCard from '../components/LibraryCard';
-import PrimaryButton from '../components/PrimaryButton';
+import LibraryCardSkeleton from '../components/LibraryCardSkeleton';
+import StatusScreen from '../components/StatusScreen';
 import { getLibraries, getMyCheckInStatus } from '../services/libraryService';
 import { joinLibraryGroup, leaveLibraryGroup, onOccupancyUpdated } from '../services/signalRService';
 import { useAuthStore } from '../store/authStore';
 import { getApiErrorMessage } from '../utils/apiError';
 import { colors } from '../theme/colors';
+import { TABLET_BREAKPOINT } from '../theme/layout';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { CheckInOutResult, Library, MyCheckInStatus } from '../types/library';
 
@@ -29,8 +34,13 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Libraries'>
 
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 400;
-// Bu projenin responsive tasarim kurali icin referans tablet breakpoint'i (bkz. CLAUDE.md).
-const TABLET_BREAKPOINT = 768;
+
+// renderItem'daki her satir icin ayni sabit degeri tasir - inline `style={{ flex: 1 }}`
+// her renderItem cagrisinda yeni bir obje literali olusturup gereksiz yeniden render'a
+// yol acardi, StyleSheet.create ile olusturulan referans render'lar arasinda stabil kalir.
+const styles = StyleSheet.create({
+  flexOne: { flex: 1 },
+});
 
 type FetchMode = 'initial' | 'refresh' | 'more' | 'silent';
 
@@ -39,6 +49,7 @@ export default function LibraryListScreen() {
   const { width } = useWindowDimensions();
   const numColumns = width >= TABLET_BREAKPOINT ? 2 : 1;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isFocused = useIsFocused();
 
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -146,28 +157,6 @@ export default function LibraryListScreen() {
     fetchPageRef.current = fetchPage;
   }, [fetchPage]);
 
-  // Ekrana her donuste (orn. bir kutuphanede check-in yapip detaydan geri
-  // gelince) mevcut arama/filtre durumuyla ilk sayfayi sessizce yeniden ceker.
-  // SignalR zaten anlik guncelleme sagliyor (bkz. handleOccupancyUpdated) -
-  // bu, ekran arka plandayken kacirilmis olabilecek guncellemeleri (SignalR
-  // baglantisi kopmus/henuz kurulmamis olabilir) yakalayan bir guvenlik agi.
-  // Ilk mount'ta yukaridaki 'initial' fetch zaten calistigi icin, ilk
-  // odaklanmayi atlayip sadece SONRAKI odaklanmalarda calisiyoruz.
-  const hasFocusedOnceRef = useRef(false);
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasFocusedOnceRef.current) {
-        hasFocusedOnceRef.current = true;
-        return;
-      }
-      // Zaten devam eden bir istek varsa (orn. arama sonucu hala geliyor)
-      // ustune bir tane daha eklemeye gerek yok - o istek zaten taze veriyi
-      // getirecek.
-      if (isFetchingRef.current) return;
-      fetchPageRef.current(1, 'silent');
-    }, []),
-  );
-
   const handleRefresh = useCallback(() => {
     fetchPage(1, 'refresh');
   }, [fetchPage]);
@@ -205,7 +194,7 @@ export default function LibraryListScreen() {
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Library>) => (
-      <View style={{ flex: 1 }}>
+      <View style={styles.flexOne}>
         <LibraryCard library={item} onPressLibrary={handleCardPress} />
       </View>
     ),
@@ -265,35 +254,73 @@ export default function LibraryListScreen() {
     }, [handleOccupancyUpdated]),
   );
 
-  // Ekrana her odaklanmada (ilk mount dahil) taze check-in durumu ceker -
-  // ornegin LibraryDetailScreen'den check-out yapip geri donunce banner bu
-  // sayede otomatik kaybolur, baska bir cihazdan check-in yapilmissa da
-  // burada gorunur. SignalR'daki OccupancyUpdated event'i sadece agregat
-  // doluluk sayilarini tasir, "kim check-in yapti" bilgisini icermedigi icin
-  // bu durumun kaynagi hep REST + focus-refresh olmali.
+  // Ekrana her donuste (orn. bir kutuphanede check-in yapip detaydan geri gelince ya da
+  // baska bir cihazdan check-in/check-out yapilmissa) hem liste sayfasini (sessizce) hem
+  // check-in durumunu taze ceker - LibraryDetailScreen'in load()'undaki ile ayni
+  // Promise.allSettled deseniyle TEK bir focus effect'te paralel calisirlar (onceden iki
+  // ayri useFocusEffect'ti). SignalR zaten anlik guncelleme sagliyor (bkz.
+  // handleOccupancyUpdated) - liste tarafi bu yuzden sadece ekran arka plandayken
+  // kacirilmis olabilecek guncellemeleri (SignalR baglantisi kopmus/henuz kurulmamis
+  // olabilir) yakalayan bir guvenlik agi; check-in durumu ise SignalR'in OccupancyUpdated
+  // event'inde hic tasinmiyor ("kim check-in yapti" bilgisi yok), kaynagi hep REST +
+  // focus-refresh olmali. Ilk mount'ta yukaridaki 'initial' fetch zaten calistigi icin,
+  // liste tarafinda ilk odaklanmayi atlayip sadece SONRAKI odaklanmalarda cekiyoruz -
+  // check-in durumu icin böyle bir atlama yok, ilk odaklanmada da cekilir.
+  const hasFocusedOnceRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
+      let isActive = true;
+
       if (!isAuthenticated) {
         setCheckInStatus(null);
-        return;
       }
-      let isActive = true;
-      getMyCheckInStatus()
-        .then((status) => {
-          if (isActive) setCheckInStatus(status);
-        })
-        .catch((err) => {
+
+      const isFirstFocus = !hasFocusedOnceRef.current;
+      hasFocusedOnceRef.current = true;
+      // Zaten devam eden bir istek varsa (orn. arama sonucu hala geliyor) ustune bir tane
+      // daha eklemeye gerek yok - o istek zaten taze veriyi getirecek.
+      const shouldRefetchList = !isFirstFocus && !isFetchingRef.current;
+
+      Promise.allSettled([
+        shouldRefetchList ? fetchPageRef.current(1, 'silent') : Promise.resolve(),
+        isAuthenticated ? getMyCheckInStatus() : Promise.resolve(null),
+      ]).then(([, checkInOutcome]) => {
+        if (!isActive || !isAuthenticated) return;
+
+        if (checkInOutcome.status === 'fulfilled') {
+          setCheckInStatus(checkInOutcome.value);
+        } else {
           // Kullaniciya gorunur bir hata gostermiyoruz (bu ikincil bir ozellik,
           // banner sadece bir sonraki odaklanmada sessizce tekrar denenir) -
           // ama signalRService.ts'deki ayni felsefeyle en azindan gelistirici/log
           // seviyesinde fark edilebilir olsun diye uyari basiyoruz.
-          console.warn('[checkin-status] Güncellenemedi:', err);
-        });
+          console.warn('[checkin-status] Güncellenemedi:', checkInOutcome.reason);
+        }
+      });
+
       return () => {
         isActive = false;
       };
     }, [isAuthenticated]),
   );
+
+  // Uygulama arka plandan on plana (active) gectiginde check-in durumunu tekrar ceker -
+  // orn. kullanici uygulamayi arka plana atip baska bir cihazdan check-out yaptiktan
+  // sonra geri donerse, bu durum yukaridaki useFocusEffect'i TETIKLEMEZ (React
+  // Navigation'in focus/blur'u sadece navigasyon gecisleriyle ilgilidir, isletim
+  // sistemi seviyesindeki arka plan/on plan gecisiyle degil) - bu ayri AppState
+  // dinleyicisi olmadan bu senaryo yakalanamaz. Sadece ekran o an odaktaysa
+  // (isFocused) ve giris yapilmissa calisir.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState !== 'active' || !isFocused || !isAuthenticated) return;
+      getMyCheckInStatus()
+        .then(setCheckInStatus)
+        .catch((err) => console.warn('[checkin-status] Güncellenemedi:', err));
+    });
+
+    return () => subscription.remove();
+  }, [isFocused, isAuthenticated]);
 
   // ID kumesinin stabil bir temsili - useFocusEffect'in bagimliligi bu olsun
   // diye, `items`'in kendisi degil. `items` referansi hem sayfalama/aramada
@@ -332,7 +359,7 @@ export default function LibraryListScreen() {
   const showFullScreenLoading = isLoading && items.length === 0;
   const showFullScreenError = Boolean(error) && items.length === 0 && !isLoading;
 
-  const renderFooter = () => {
+  const renderFooter = useCallback(() => {
     if (isLoadingMore) {
       return (
         <View className="py-4">
@@ -351,11 +378,12 @@ export default function LibraryListScreen() {
       );
     }
     return null;
-  };
+  }, [isLoadingMore, error, items.length, handleRetry]);
 
   return (
     <View className="flex-1 bg-background">
       <View className="px-4 pb-3 pt-4">
+        <Text className="mb-3 text-sm text-ink-muted">Kütüphanede yer var mı, önce bak</Text>
         <View className="h-12 flex-row items-center rounded-xl border border-border bg-surface px-3.5">
           {isLoading ? (
             <ActivityIndicator size="small" color={colors.inkFaint} />
@@ -380,18 +408,22 @@ export default function LibraryListScreen() {
       </View>
 
       {showFullScreenLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View className="flex-1 px-4 pt-1">
+          <LibraryCardSkeleton />
+          <LibraryCardSkeleton />
+          <LibraryCardSkeleton />
+          <LibraryCardSkeleton />
         </View>
       ) : showFullScreenError ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-danger-light">
-            <Ionicons name="cloud-offline-outline" size={32} color={colors.danger} />
-          </View>
-          <Text className="mb-1.5 text-center text-base font-semibold text-ink">Bir şeyler ters gitti</Text>
-          <Text className="mb-5 text-center text-sm text-ink-muted">{error}</Text>
-          <PrimaryButton label="Tekrar Dene" onPress={handleRetry} />
-        </View>
+        <StatusScreen
+          icon="cloud-offline-outline"
+          iconColor={colors.danger}
+          iconBgClassName="bg-danger-light"
+          title="Bir şeyler ters gitti"
+          description={error ?? ''}
+          actionLabel="Tekrar Dene"
+          onAction={handleRetry}
+        />
       ) : (
         <FlatList
           // FlatList calisirken numColumns degistirilemiyor (RN kisitlamasi) - tablet/telefon
@@ -418,8 +450,8 @@ export default function LibraryListScreen() {
           }
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center py-16">
-              <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-primary-light">
-                <Ionicons name="library-outline" size={32} color={colors.primary} />
+              <View className="mb-4">
+                <IconBadge icon="library-outline" size={32} backgroundClassName="h-16 w-16 rounded-2xl bg-primary-light" iconColor={colors.primary} />
               </View>
               <Text className="mb-1.5 text-base font-semibold text-ink">Kütüphane bulunamadı</Text>
               <Text className="text-center text-sm text-ink-muted">
@@ -427,7 +459,7 @@ export default function LibraryListScreen() {
               </Text>
             </View>
           }
-          ListFooterComponent={renderFooter()}
+          ListFooterComponent={renderFooter}
         />
       )}
     </View>

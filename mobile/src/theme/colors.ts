@@ -1,5 +1,6 @@
-// tailwind.config.js'deki theme.extend.colors ile birebir ayni tutulmali.
-// Ikon rengi gibi className kabul etmeyen yerlerde kullanilir.
+// Tek renk kaynagi burasi - tailwind.config.js bu objeyi import edip Tailwind'in nested
+// renk skalasina (DEFAULT/dark/light) cevirir, elle kopyalanan ikinci bir hex listesi
+// tutmaz. Bu obje ayrica ikon rengi gibi className kabul etmeyen yerlerde de kullanilir.
 export const colors = {
   primary: '#4F46E5',
   primaryDark: '#4338CA',

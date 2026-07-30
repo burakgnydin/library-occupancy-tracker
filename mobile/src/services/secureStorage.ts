@@ -31,4 +31,10 @@ const nativeStorage: SecureStorage = {
   deleteItem: SecureStore.deleteItemAsync,
 };
 
-export const secureStorage: SecureStorage = Platform.OS === 'web' ? webStorage : nativeStorage;
+// Pozitif kontrol: sadece bilinen native platformlarda (iOS/Android) nativeStorage
+// kullanilir, digerlerinde (web dahil, ileride eklenebilecek Windows/macOS gibi Expo
+// desktop platformlari dahil) webStorage'a duşulur - yeni bir platform eklendiginde
+// yanlislikla SecureStore'un desteklemedigi bir ortamda "native" sayilip calisma
+// zamaninda patlamak yerine, taninmayan platformlar guvenli/bilinen fallback'e duşer.
+export const secureStorage: SecureStorage =
+  Platform.OS === 'ios' || Platform.OS === 'android' ? nativeStorage : webStorage;

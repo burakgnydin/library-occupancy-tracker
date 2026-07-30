@@ -4,15 +4,20 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
+import OccupancyBar from '../components/OccupancyBar';
 import PrimaryButton from '../components/PrimaryButton';
+import StatusScreen from '../components/StatusScreen';
 import { checkIn, checkOut, getLibraryById, getMyCheckInStatus } from '../services/libraryService';
 import { joinLibraryGroup, leaveLibraryGroup, onOccupancyUpdated } from '../services/signalRService';
 import { getApiErrorMessage } from '../utils/apiError';
-import { occupancyLabels, occupancyStyles } from '../utils/occupancyStyles';
+import { occupancyLabels, occupancyStyles, resolveOccupancyStatus } from '../utils/occupancyStyles';
 import { useRequireAuth } from '../hooks/useRequireAuth';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
+import { DETAIL_CONTENT_MAX_WIDTH } from '../theme/layout';
+import { shadows } from '../theme/shadows';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { CheckInOutResult, Library } from '../types/library';
 
@@ -156,8 +161,6 @@ export default function LibraryDetailScreen() {
   }, [feedback]);
 
   const isCheckedInHere = checkedInLibraryId === libraryId;
-  const isFull = Boolean(library) && library!.currentOccupancy >= library!.capacity;
-  const actionDisabled = isSubmitting || (isFull && !isCheckedInHere);
 
   // QrScannerScreen'de bir QR kod okutulduktan sonra cagrilir - asil check-in/
   // check-out API cagrisi (ve QR token dogrulamasi) burada degil, backend'de
@@ -194,6 +197,8 @@ export default function LibraryDetailScreen() {
           type: 'success',
           message: result.type === 'CheckIn' ? 'Giriş kaydınız oluşturuldu.' : 'Çıkış kaydınız oluşturuldu.',
         });
+        // Web'de karsiligi yok (no-op), gercek cihazda basariyi hafif bir titresimle hissettirir.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (err) {
         setFeedback({ type: 'error', message: getApiErrorMessage(err) });
       } finally {
@@ -237,14 +242,15 @@ export default function LibraryDetailScreen() {
 
   if (error && !library) {
     return (
-      <View className="flex-1 items-center justify-center bg-background px-8">
-        <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-danger-light">
-          <Ionicons name="cloud-offline-outline" size={32} color={colors.danger} />
-        </View>
-        <Text className="mb-1.5 text-center text-base font-semibold text-ink">Bir şeyler ters gitti</Text>
-        <Text className="mb-5 text-center text-sm text-ink-muted">{error}</Text>
-        <PrimaryButton label="Tekrar Dene" onPress={() => load()} />
-      </View>
+      <StatusScreen
+        icon="cloud-offline-outline"
+        iconColor={colors.danger}
+        iconBgClassName="bg-danger-light"
+        title="Bir şeyler ters gitti"
+        description={error}
+        actionLabel="Tekrar Dene"
+        onAction={() => load()}
+      />
     );
   }
 
@@ -252,27 +258,22 @@ export default function LibraryDetailScreen() {
     return null;
   }
 
-  const statusStyle = occupancyStyles[library.occupancyStatus];
-  const fillPercentage = Math.min(100, Math.max(0, library.occupancyPercentage));
+  // Bu guard'in HEMEN ALTINDA - TypeScript burada `library`'nin non-null oldugunu
+  // narrow ediyor, ! (non-null assertion) kullanmaya gerek kalmiyor.
+  const isFull = library.currentOccupancy >= library.capacity;
+  const actionDisabled = isSubmitting || (isFull && !isCheckedInHere);
+  const safeStatus = resolveOccupancyStatus(library.occupancyStatus);
+  const statusStyle = occupancyStyles[safeStatus];
 
   return (
     <View className="flex-1 bg-background">
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
         {/* Tablette icerik gerilmesin diye maksimum genislik + ortalama (bkz.
-            CLAUDE.md responsive kurali, Login/Register'daki max-w-[480px] ile
+            CLAUDE.md responsive kurali, Login/Register'daki AUTH_CONTENT_MAX_WIDTH ile
             ayni mantik) - telefonda w-full zaten mevcut genislikten dar oldugu
-            icin max-w-[640px] hicbir etki yapmaz. */}
-        <View className="w-full max-w-[640px] self-center">
-          <View
-            className="mb-4 rounded-2xl bg-surface p-5"
-            style={{
-              shadowColor: colors.ink,
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
-            }}
-          >
+            icin DETAIL_CONTENT_MAX_WIDTH hicbir etki yapmaz. */}
+        <View className={`w-full ${DETAIL_CONTENT_MAX_WIDTH} self-center`}>
+          <View className="mb-4 rounded-2xl bg-surface p-5" style={shadows.cardShadow}>
             <Text className="text-xl font-bold text-ink">{library.name}</Text>
             <View className="mt-2 flex-row items-start">
               <Ionicons name="location-outline" size={16} color={colors.inkMuted} style={{ marginTop: 2 }} />
@@ -282,27 +283,18 @@ export default function LibraryDetailScreen() {
             </View>
           </View>
 
-          <View
-            className="rounded-2xl bg-surface p-5"
-            style={{
-              shadowColor: colors.ink,
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 2,
-            }}
-          >
+          <View className="rounded-2xl bg-surface p-5" style={shadows.cardShadow}>
             <View className="flex-row items-center justify-between">
               <Text className="text-sm font-medium text-ink-muted">Doluluk Durumu</Text>
               <View className={`rounded-full border px-3 py-1 ${statusStyle.border} ${statusStyle.bg}`}>
-                <Text className={`text-xs font-semibold ${statusStyle.text}`}>{occupancyLabels[library.occupancyStatus]}</Text>
+                <Text className={`text-xs font-semibold ${statusStyle.text}`}>{occupancyLabels[safeStatus]}</Text>
               </View>
             </View>
 
             <Text className={`mt-3 text-5xl font-extrabold ${statusStyle.text}`}>%{library.occupancyPercentage}</Text>
 
-            <View className="mt-4 h-3 overflow-hidden rounded-full bg-border">
-              <View className="h-full rounded-full" style={{ width: `${fillPercentage}%`, backgroundColor: statusStyle.solid }} />
+            <View className="mt-4">
+              <OccupancyBar percentage={library.occupancyPercentage} status={library.occupancyStatus} height="h-3" />
             </View>
 
             <View className="mt-3 flex-row items-center">
@@ -325,7 +317,7 @@ export default function LibraryDetailScreen() {
       {feedback ? (
         <View className="absolute left-4 right-4 items-center" style={{ bottom: 100 }}>
           <View
-            className={`w-full max-w-[640px] rounded-xl border px-4 py-3 ${
+            className={`w-full ${DETAIL_CONTENT_MAX_WIDTH} rounded-xl border px-4 py-3 ${
               feedback.type === 'success' ? 'border-success bg-success-light' : 'border-danger bg-danger-light'
             }`}
           >
@@ -340,11 +332,11 @@ export default function LibraryDetailScreen() {
         <Pressable
           onPress={handlePress}
           disabled={actionDisabled}
-          className={`h-14 w-full max-w-[640px] flex-row items-center justify-center rounded-2xl active:opacity-80 ${
-            isCheckedInHere ? 'bg-danger' : 'bg-primary'
+          className={`h-14 w-full ${DETAIL_CONTENT_MAX_WIDTH} flex-row items-center justify-center rounded-2xl active:opacity-80 ${
+            isCheckedInHere ? 'bg-danger' : 'bg-success'
           } ${actionDisabled ? 'opacity-60' : ''}`}
           style={{
-            shadowColor: isCheckedInHere ? colors.danger : colors.primary,
+            shadowColor: isCheckedInHere ? colors.danger : colors.success,
             shadowOpacity: 0.25,
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 4 },

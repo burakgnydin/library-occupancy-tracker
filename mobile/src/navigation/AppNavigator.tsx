@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as SplashScreen from 'expo-splash-screen';
 
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
@@ -39,6 +40,16 @@ export default function AppNavigator() {
     hydrate();
   }, [hydrate]);
 
+  // Native splash ekrani (bkz. App.tsx'teki preventAutoHideAsync) hydrate() bitene kadar
+  // kullaniciyi bu asagidaki ActivityIndicator'dan (ve olasi bir Login/Dashboard
+  // titremesinden) tamamen gizler - isHydrating false olunca RootStack zaten dogru
+  // ekranla render edilmis olur, splash o anda kalkinca kullanici direkt son hali gorur.
+  useEffect(() => {
+    if (!isHydrating) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isHydrating]);
+
   if (isHydrating) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -49,7 +60,12 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      <RootStack.Navigator screenOptions={{ headerShadowVisible: false }}>
+      {/* animation: 'slide_from_right' tum stack'e tek bir yerden, tutarli bir gecis
+          animasyonu uyguluyor (native-stack'in kendi platform-native suresi/egrisi -
+          yaklasik 250ms, ayrica sayisal bir sure prop'u yok). Login/Register/QrScanner
+          kendi presentation:'modal' degerlerini tasidigi icin (asagida) bu ayar onlari
+          etkilemiyor - modal gecisi zaten kendi native davranisini koruyor. */}
+      <RootStack.Navigator screenOptions={{ headerShadowVisible: false, animation: 'slide_from_right' }}>
         <RootStack.Screen
           name="Libraries"
           component={LibraryListScreen}

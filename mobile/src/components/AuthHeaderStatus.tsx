@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import ConfirmDialog from './ConfirmDialog';
+import IconBadge from './IconBadge';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -42,9 +43,7 @@ export default function AuthHeaderStatus() {
   return (
     <View className="flex-row items-center" style={{ marginRight: 4 }}>
       <View className="mr-2 flex-row items-center rounded-full bg-primary-light px-2.5 py-1.5">
-        <View className="mr-1.5 h-5 w-5 items-center justify-center rounded-full bg-primary">
-          <Ionicons name="person" size={12} color="#FFFFFF" />
-        </View>
+        <IconBadge icon="person" size={12} backgroundClassName="mr-1.5 h-5 w-5 rounded-full bg-primary" iconColor="#FFFFFF" />
         <Text className="text-xs font-semibold text-primary" numberOfLines={1}>
           {role ? ROLE_LABELS[role] : 'Hesabım'}
         </Text>

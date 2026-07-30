@@ -1,41 +1,50 @@
 /** @type {import('tailwindcss').Config} */
+// Tek renk kaynagi: src/theme/colors.ts. Burada ikinci, elle senkronize edilen bir hex
+// listesi TUTULMUYOR - asagidaki `colors` objesi sadece o dosyadaki duz degerleri
+// Tailwind'in nested renk skalasi (DEFAULT/dark/light) sekline haritalar; degerlerin
+// kendisi SADECE colors.ts'te tanimli.
+const { colors } = require('./src/theme/colors.ts');
+
 module.exports = {
   content: ['./App.tsx', './src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
-      // src/theme/colors.ts ile birebir aynı tutulmalı (Tailwind config JS,
-      // TS dosyasindan otomatik uretilemiyor).
       colors: {
         primary: {
-          DEFAULT: '#4F46E5',
-          dark: '#4338CA',
-          light: '#EEF2FF',
+          DEFAULT: colors.primary,
+          dark: colors.primaryDark,
+          light: colors.primaryLight,
         },
         accent: {
-          DEFAULT: '#0D9488',
-          light: '#CCFBF1',
+          DEFAULT: colors.accent,
+          light: colors.accentLight,
         },
         ink: {
-          DEFAULT: '#0F172A',
-          muted: '#64748B',
-          faint: '#94A3B8',
+          DEFAULT: colors.ink,
+          muted: colors.inkMuted,
+          faint: colors.inkFaint,
         },
-        surface: '#FFFFFF',
-        background: '#F8FAFC',
-        border: '#E2E8F0',
+        surface: colors.surface,
+        background: colors.background,
+        border: colors.border,
         danger: {
-          DEFAULT: '#DC2626',
-          light: '#FEF2F2',
+          DEFAULT: colors.danger,
+          light: colors.dangerLight,
         },
         success: {
-          DEFAULT: '#16A34A',
-          light: '#DCFCE7',
+          DEFAULT: colors.success,
+          light: colors.successLight,
         },
         warning: {
-          DEFAULT: '#D97706',
-          light: '#FEF3C7',
+          DEFAULT: colors.warning,
+          light: colors.warningLight,
         },
+      },
+      // FormInput/PrimaryButton'daki tekrarlanan h-[52px] magic number'inin adlandirilmis
+      // hali - bkz. h-control kullanimlari.
+      height: {
+        control: '52px',
       },
     },
   },

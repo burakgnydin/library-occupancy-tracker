@@ -5,9 +5,9 @@ import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { BarcodeScanningResult } from 'expo-camera';
-import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
-import PrimaryButton from '../components/PrimaryButton';
+import StatusScreen from '../components/StatusScreen';
 import { colors } from '../theme/colors';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
@@ -18,6 +18,9 @@ type ScannerNavigationProp = NativeStackNavigationProp<RootStackParamList, 'QrSc
 // dev bir kare olmasin diye hem genislige hem yuksekliğe gore sinirlanir
 // (bkz. CLAUDE.md tablet/responsive kurali).
 const MAX_FRAME_SIZE = 280;
+// Ekranin kisa kenarinin yuzde kacinin tarama cercevesine ayrilacagi - kucuk
+// telefonlarda cerceve ekrani kaplamasin, MAX_FRAME_SIZE ile birlikte ust siniri belirler.
+const FRAME_SIZE_RATIO = 0.62;
 
 export default function QrScannerScreen() {
   const { libraryId, action } = useRoute<ScannerRouteProp>().params;
@@ -43,6 +46,7 @@ export default function QrScannerScreen() {
     (result: BarcodeScanningResult) => {
       if (hasHandledRef.current) return;
       hasHandledRef.current = true;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
       // navigate() yerine popTo() kullanilir: navigate(), hedef ekran
       // stack'te bitisik olmayan bir konumdaysa (List -> Detail -> Scanner
@@ -78,32 +82,33 @@ export default function QrScannerScreen() {
 
   if (!permission.granted) {
     return (
-      <View className="flex-1 items-center justify-center bg-background px-8">
-        <View className="w-full max-w-[480px] items-center self-center">
-          <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-primary-light">
-            <Ionicons name="camera-outline" size={32} color={colors.primary} />
-          </View>
-          <Text className="mb-1.5 text-center text-lg font-bold text-ink">Kamera erişimi gerekiyor</Text>
-          <Text className="mb-6 text-center text-sm text-ink-muted">
-            Kütüphane girişindeki QR kodu okutabilmemiz için kameraya erişim izni istiyoruz. Bu izin sadece QR kod
-            tarama sırasında kullanılır.
-          </Text>
-          {permission.canAskAgain ? (
-            <PrimaryButton label="İzin Ver" onPress={requestPermission} />
+      <StatusScreen
+        icon="camera-outline"
+        iconColor={colors.primary}
+        iconBgClassName="bg-primary-light"
+        title="Kamera erişimi gerekiyor"
+        description={
+          permission.canAskAgain ? (
+            'Kütüphane girişindeki QR kodu okutabilmemiz için kameraya erişim izni istiyoruz. Bu izin sadece QR kod tarama sırasında kullanılır.'
           ) : (
             <>
-              <Text className="mb-4 text-center text-sm text-danger">
+              <Text className="text-center text-sm text-ink-muted">
+                Kütüphane girişindeki QR kodu okutabilmemiz için kameraya erişim izni istiyoruz. Bu izin sadece QR
+                kod tarama sırasında kullanılır.
+              </Text>
+              <Text className="mt-3 text-center text-sm text-danger">
                 Kamera izni daha önce reddedildi. Devam etmek için ayarlardan izin vermeniz gerekiyor.
               </Text>
-              <PrimaryButton label="Ayarları Aç" onPress={() => Linking.openSettings()} />
             </>
-          )}
-        </View>
-      </View>
+          )
+        }
+        actionLabel={permission.canAskAgain ? 'İzin Ver' : 'Ayarları Aç'}
+        onAction={permission.canAskAgain ? requestPermission : () => Linking.openSettings()}
+      />
     );
   }
 
-  const frameSize = Math.min(MAX_FRAME_SIZE, Math.min(width, height) * 0.62);
+  const frameSize = Math.min(MAX_FRAME_SIZE, Math.min(width, height) * FRAME_SIZE_RATIO);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000000' }}>

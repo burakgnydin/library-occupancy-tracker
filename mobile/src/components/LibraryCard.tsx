@@ -2,9 +2,11 @@ import { memo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import OccupancyBar from './OccupancyBar';
 import type { Library } from '../types/library';
 import { colors } from '../theme/colors';
-import { occupancyLabels, occupancyStyles } from '../utils/occupancyStyles';
+import { shadows } from '../theme/shadows';
+import { occupancyLabels, occupancyStyles, resolveOccupancyStatus } from '../utils/occupancyStyles';
 
 interface LibraryCardProps {
   library: Library;
@@ -16,20 +18,14 @@ interface LibraryCardProps {
 }
 
 function LibraryCard({ library, onPressLibrary }: LibraryCardProps) {
-  const statusStyle = occupancyStyles[library.occupancyStatus];
-  const fillPercentage = Math.min(100, Math.max(0, library.occupancyPercentage));
+  const safeStatus = resolveOccupancyStatus(library.occupancyStatus);
+  const statusStyle = occupancyStyles[safeStatus];
 
   return (
     <Pressable
       onPress={() => onPressLibrary(library.id)}
       className="mb-3 rounded-2xl bg-surface p-4 active:opacity-80"
-      style={{
-        shadowColor: colors.ink,
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
-      }}
+      style={shadows.cardShadow}
     >
       <View className="flex-row items-start justify-between">
         <View className="mr-3 flex-1">
@@ -50,12 +46,7 @@ function LibraryCard({ library, onPressLibrary }: LibraryCardProps) {
       </View>
 
       <View className="mt-3">
-        <View className="h-2 overflow-hidden rounded-full bg-border">
-          <View
-            className="h-full rounded-full"
-            style={{ width: `${fillPercentage}%`, backgroundColor: statusStyle.solid }}
-          />
-        </View>
+        <OccupancyBar percentage={library.occupancyPercentage} status={library.occupancyStatus} height="h-2" />
         <View className="mt-1.5 flex-row items-center justify-between">
           <View className="flex-row items-center">
             <Ionicons name="people-outline" size={14} color={colors.inkMuted} />
@@ -63,7 +54,7 @@ function LibraryCard({ library, onPressLibrary }: LibraryCardProps) {
               {library.currentOccupancy}/{library.capacity} kişi
             </Text>
           </View>
-          <Text className={`text-xs font-medium ${statusStyle.text}`}>{occupancyLabels[library.occupancyStatus]}</Text>
+          <Text className={`text-xs font-medium ${statusStyle.text}`}>{occupancyLabels[safeStatus]}</Text>
         </View>
       </View>
     </Pressable>
