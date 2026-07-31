@@ -1,0 +1,27 @@
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Local dev config and secrets
+appsettings.Development.json
+*.user
+
+# Local SQLite database + logs
+*.db
+*.db-shm
+*.db-wal
+logs/
+**/logs/
+
+# VCS / IDE / tooling
+.git/
+.gitignore
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# Docs not needed at runtime
+README.md
+CLAUDE.md
