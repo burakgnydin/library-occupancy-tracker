@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { usePulseAnimation } from '../hooks/usePulseAnimation';
 import { colors } from '../theme/colors';
 
 interface ActiveCheckInBannerProps {
@@ -45,25 +46,14 @@ function formatElapsedLabel(checkedInAt: string, now: number): string {
 // kartlardan ayrisması icin vurgu (accent) rengi kullanir.
 function ActiveCheckInBanner({ libraryId, libraryName, checkedInAt, onPressLibrary }: ActiveCheckInBannerProps) {
   const [now, setNow] = useState(() => Date.now());
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const hasActiveCheckIn = Boolean(libraryId && checkedInAt);
+  const pulseAnim = usePulseAnimation(1, 0.3, PULSE_DURATION_MS, hasActiveCheckIn);
 
   useEffect(() => {
     if (!libraryId || !checkedInAt) return;
     const intervalId = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(intervalId);
   }, [libraryId, checkedInAt]);
-
-  useEffect(() => {
-    if (!libraryId || !checkedInAt) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: PULSE_DURATION_MS, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: PULSE_DURATION_MS, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [libraryId, checkedInAt, pulseAnim]);
 
   if (!libraryId || !checkedInAt) return null;
 

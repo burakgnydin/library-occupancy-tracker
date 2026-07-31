@@ -1,24 +1,15 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo } from 'react';
 import { Animated, View } from 'react-native';
+
+import { usePulseAnimation } from '../hooks/usePulseAnimation';
 
 const PULSE_DURATION_MS = 700;
 
 // LibraryCard ile ayni boyut/duzen iskeleti - ilk yuklemede spinner yerine gosterilen
-// norotr renkli placeholder. ActiveCheckInBanner'daki ayni pulse deseni (Animated.loop +
-// sequence) kullanilir.
+// norotr renkli placeholder. ActiveCheckInBanner'daki ayni pulse deseni usePulseAnimation
+// hook'unda paylasilir.
 function LibraryCardSkeleton() {
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: PULSE_DURATION_MS, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: PULSE_DURATION_MS, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseAnim]);
+  const pulseAnim = usePulseAnimation(0.4, 1, PULSE_DURATION_MS);
 
   return (
     <Animated.View className="mb-3 rounded-2xl bg-surface p-4" style={{ opacity: pulseAnim }}>

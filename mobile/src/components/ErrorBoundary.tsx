@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 
 import StatusScreen from './StatusScreen';
 import { colors } from '../theme/colors';
@@ -28,6 +29,13 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: unknown, errorInfo: unknown) {
     console.error('[ErrorBoundary] Yakalanan render hatasi:', error, errorInfo);
+    // Guvenlik agi: normal kapanma yolu AppNavigator'daki isHydrating geçişine bagli (bkz. o
+    // dosyadaki yorum) - eger bu componentDidCatch'i tetikleyen hata AppNavigator daha
+    // isHydrating=false'a hic ulasamadan olustuysa, o efekt hicbir zaman calismaz ve native
+    // splash ekrani bu fallback'in arkasinda sonsuza kadar acik kalirdi (kullanici hicbir
+    // zaman asagidaki "Tekrar Dene" ekranini goremezdi). hideAsync zaten idempotent/no-op
+    // (splash zaten kapaliysa hicbir sey yapmaz), bu yuzden burada tekrar cagirmak zararsiz.
+    SplashScreen.hideAsync().catch(() => {});
   }
 
   handleReset = () => {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -16,10 +17,12 @@ interface IconBadgeProps {
 
 // AuthScreenLayout, AuthHeaderStatus, StatusScreen, LibraryListScreen'in bos liste
 // durumu gibi yerlerde tekrarlanan "renkli arka plan + ortalanmis ikon" deseni.
-export default function IconBadge({ icon, size, backgroundClassName, iconColor }: IconBadgeProps) {
+function IconBadge({ icon, size, backgroundClassName, iconColor }: IconBadgeProps) {
   return (
     <View className={`items-center justify-center ${backgroundClassName}`}>
       <Ionicons name={icon} size={size} color={iconColor} />
     </View>
   );
 }
+
+export default memo(IconBadge);

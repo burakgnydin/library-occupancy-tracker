@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View } from 'react-native';
 
 import { clampPercentage } from '../utils/occupancy';
@@ -16,7 +17,7 @@ interface OccupancyBarProps {
 
 // LibraryCard ve LibraryDetailScreen'de tekrarlanan doluluk cubugu render mantigi +
 // fillPercentage clamp hesaplamasi (bkz. clampPercentage) tek yerde.
-export default function OccupancyBar({ percentage, status, height }: OccupancyBarProps) {
+function OccupancyBar({ percentage, status, height }: OccupancyBarProps) {
   const fillPercentage = clampPercentage(percentage);
   // resolveOccupancyStatus: `status` derleme-zamaninda OccupancyStatus tipinde gorunse de,
   // nihayetinde bir API response'undan geliyor - bkz. occupancyStyles.ts'teki calisma-zamani
@@ -29,3 +30,5 @@ export default function OccupancyBar({ percentage, status, height }: OccupancyBa
     </View>
   );
 }
+
+export default memo(OccupancyBar);

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ interface AuthScreenLayoutProps {
 // tablette gerilmesin diye max-w-[480px] self-center (bkz. CLAUDE.md responsive kurali)
 // + ikon rozeti/baslik/alt baslik deseni. Iki ekran arasinda degisen tek sey ikon/renk/
 // metin - form icerigi children olarak geciliyor.
-export default function AuthScreenLayout({ icon, iconColor, iconBgClassName, title, subtitle, children }: AuthScreenLayoutProps) {
+function AuthScreenLayout({ icon, iconColor, iconBgClassName, title, subtitle, children }: AuthScreenLayoutProps) {
   return (
     <KeyboardAvoidingView className="flex-1 bg-background" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" className="px-6">
@@ -42,3 +43,5 @@ export default function AuthScreenLayout({ icon, iconColor, iconBgClassName, tit
     </KeyboardAvoidingView>
   );
 }
+
+export default memo(AuthScreenLayout);

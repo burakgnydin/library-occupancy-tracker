@@ -17,7 +17,7 @@ import { useRequireAuth } from '../hooks/useRequireAuth';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { DETAIL_CONTENT_MAX_WIDTH } from '../theme/layout';
-import { shadows } from '../theme/shadows';
+import { actionButtonShadow, shadows } from '../theme/shadows';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { CheckInOutResult, Library } from '../types/library';
 
@@ -335,13 +335,7 @@ export default function LibraryDetailScreen() {
           className={`h-14 w-full ${DETAIL_CONTENT_MAX_WIDTH} flex-row items-center justify-center rounded-2xl active:opacity-80 ${
             isCheckedInHere ? 'bg-danger' : 'bg-success'
           } ${actionDisabled ? 'opacity-60' : ''}`}
-          style={{
-            shadowColor: isCheckedInHere ? colors.danger : colors.success,
-            shadowOpacity: 0.25,
-            shadowRadius: 8,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 3,
-          }}
+          style={actionButtonShadow(isCheckedInHere ? colors.danger : colors.success)}
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />

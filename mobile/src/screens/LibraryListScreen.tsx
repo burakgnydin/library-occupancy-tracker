@@ -312,14 +312,25 @@ export default function LibraryListScreen() {
   // dinleyicisi olmadan bu senaryo yakalanamaz. Sadece ekran o an odaktaysa
   // (isFocused) ve giris yapilmissa calisir.
   useEffect(() => {
+    // Yukaridaki useFocusEffect'teki ayni isActive deseni: isFocused/isAuthenticated
+    // degisip (ya da ekran unmount olup) bu effect yeniden calistiktan/temizlendikten SONRA
+    // gec donen bir getMyCheckInStatus() yaniti, artik gecerli olmayan bir durumu state'e
+    // yazmasin diye.
+    let isActive = true;
+
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState !== 'active' || !isFocused || !isAuthenticated) return;
       getMyCheckInStatus()
-        .then(setCheckInStatus)
+        .then((status) => {
+          if (isActive) setCheckInStatus(status);
+        })
         .catch((err) => console.warn('[checkin-status] Güncellenemedi:', err));
     });
 
-    return () => subscription.remove();
+    return () => {
+      isActive = false;
+      subscription.remove();
+    };
   }, [isFocused, isAuthenticated]);
 
   // ID kumesinin stabil bir temsili - useFocusEffect'in bagimliligi bu olsun

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +27,7 @@ interface StatusScreenProps {
 // self-center her zaman uygulanir (bkz. CLAUDE.md responsive kurali) - QrScannerScreen
 // bunu zaten tek basina yapiyordu, List/Detail'in hata durumlari bu birlestirmeyle ayni
 // korumayi kazaniyor.
-export default function StatusScreen({ icon, iconColor, iconBgClassName, title, description, actionLabel, onAction }: StatusScreenProps) {
+function StatusScreen({ icon, iconColor, iconBgClassName, title, description, actionLabel, onAction }: StatusScreenProps) {
   return (
     <View className="flex-1 items-center justify-center bg-background px-8">
       <View className={`w-full ${AUTH_CONTENT_MAX_WIDTH} items-center self-center`}>
@@ -46,3 +47,5 @@ export default function StatusScreen({ icon, iconColor, iconBgClassName, title, 
     </View>
   );
 }
+
+export default memo(StatusScreen);
