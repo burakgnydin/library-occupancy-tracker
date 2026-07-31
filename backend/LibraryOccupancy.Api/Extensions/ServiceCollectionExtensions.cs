@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text;
@@ -111,6 +112,35 @@ public static class ServiceCollectionExtensions
         using var scope = app.Services.CreateScope();
         var mapper = scope.ServiceProvider.GetRequiredService<IMapper>();
         mapper.ConfigurationProvider.AssertConfigurationIsValid();
+    }
+
+    // Reflects over every DTO property carrying a DataAnnotations validation attribute and warns
+    // (Development only, non-fatal - unlike ValidateAutoMapperConfiguration above, a missing entry
+    // here degrades a message, it doesn't produce a wrong value silently) if any aren't listed in
+    // ValidationMessageFormatter.FieldDisplayNames. Keeps that dictionary honest as DTOs change,
+    // without hand-maintaining a second list here of what to check.
+    public static void ValidateFieldDisplayNamesConfiguration(this WebApplication app)
+    {
+        if (!app.Environment.IsDevelopment())
+        {
+            return;
+        }
+
+        var validatedDtoFieldNames = typeof(Program).Assembly.GetTypes()
+            .Where(t => t.Namespace is not null && t.Namespace.StartsWith("LibraryOccupancy.Api.DTOs", StringComparison.Ordinal))
+            .SelectMany(t => t.GetProperties())
+            .Where(p => p.GetCustomAttributes(typeof(ValidationAttribute), inherit: true).Length > 0)
+            .Select(p => p.Name);
+
+        var missingFields = ValidationMessageFormatter.GetUnmappedFieldNames(validatedDtoFieldNames);
+
+        if (missingFields.Count > 0)
+        {
+            app.Logger.LogWarning(
+                "ValidationMessageFormatter.FieldDisplayNames is missing a Turkish display name for: {MissingFields}. " +
+                "These fields will fall back to their raw (English) property name in validation error messages.",
+                string.Join(", ", missingFields));
+        }
     }
 
     // Brute-force guard for /api/auth/login: 5 attempts per minute per client IP, no queueing

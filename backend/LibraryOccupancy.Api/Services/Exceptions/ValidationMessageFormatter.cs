@@ -32,6 +32,29 @@ public static class ValidationMessageFormatter
 
     private static readonly Regex NumberPattern = new(@"-?\d+", RegexOptions.Compiled);
 
+    // Anchored to RangeAttribute's exact default message shape ("... must be between {1} and
+    // {2}.") with pure-integer captures - deliberately narrow, on purpose. A decimal bound (e.g.
+    // [Range(0.0, 5.5)] -> "... between 0 and 5.5.") or a DateTime bound (e.g. "... between
+    // 1/1/2020 12:00:00 AM and ...") breaks this pattern (the '.', '/', ':' interrupt the \d+ run
+    // and the literal " and " no longer sits directly between two clean integers), so it simply
+    // doesn't match instead of grabbing the wrong fragment (e.g. reading "5" out of "5.5", or a
+    // day/month digit out of a date). A non-match falls through to the generic per-field message
+    // below - correct-but-generic beats confidently wrong. Supporting double/DateTime ranges with
+    // properly formatted messages would need the attribute's actual value type, which isn't
+    // available here (see Format's callers - only the rendered message string reaches this point).
+    private static readonly Regex IntegerRangePattern = new(
+        @"must be between (?<min>-?\d+) and (?<max>-?\d+)\.?\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Used by WebApplicationExtensions.ValidateFieldDisplayNamesConfiguration (Development-only
+    // startup check) to catch DTO fields that carry a validation attribute but have no Turkish
+    // display name here - such a field still works, it just falls back to its raw English property
+    // name inside an otherwise-Turkish message (see the fallback in Format below).
+    public static IReadOnlyCollection<string> GetUnmappedFieldNames(IEnumerable<string> fieldNames)
+    {
+        return fieldNames.Where(name => !FieldDisplayNames.ContainsKey(name)).Distinct().ToList();
+    }
+
     public static string Format(string fieldName, string defaultMessage)
     {
         var field = FieldDisplayNames.GetValueOrDefault(fieldName, fieldName);
@@ -60,19 +83,22 @@ public static class ValidationMessageFormatter
 
         if (defaultMessage.Contains("must be between", StringComparison.OrdinalIgnoreCase))
         {
-            var bounds = NumberPattern.Matches(defaultMessage).Select(m => m.Value).ToList();
-            if (bounds.Count < 2)
+            var match = IntegerRangePattern.Match(defaultMessage);
+            if (!match.Success)
             {
                 return $"{field} alanı geçerli bir aralıkta olmalıdır.";
             }
+
+            var min = match.Groups["min"].Value;
+            var max = match.Groups["max"].Value;
 
             // [Range(1, int.MaxValue)] is the common "just needs a floor" idiom in this codebase -
             // showing "... 1 ile 2147483647 arasında olmalıdır." as a literal range is technically
             // correct but reads as broken to a user, so an int.MaxValue upper bound collapses to a
             // simple minimum-only message instead.
-            return bounds[1] == int.MaxValue.ToString()
-                ? $"{field} alanı en az {bounds[0]} olmalıdır."
-                : $"{field} alanı {bounds[0]} ile {bounds[1]} arasında olmalıdır.";
+            return max == int.MaxValue.ToString()
+                ? $"{field} alanı en az {min} olmalıdır."
+                : $"{field} alanı {min} ile {max} arasında olmalıdır.";
         }
 
         return $"{field} alanı geçersiz.";
