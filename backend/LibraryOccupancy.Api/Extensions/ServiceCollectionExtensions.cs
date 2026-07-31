@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
 
         services.Configure<InitialAdminSettings>(configuration.GetSection(InitialAdminSettings.SectionName));
         services.Configure<RefreshTokenCleanupSettings>(configuration.GetSection(RefreshTokenCleanupSettings.SectionName));
+        services.Configure<DemoSeedingSettings>(configuration.GetSection(DemoSeedingSettings.SectionName));
         services.AddHostedService<RefreshTokenCleanupBackgroundService>();
 
         services.AddJwtAuthentication(configuration);

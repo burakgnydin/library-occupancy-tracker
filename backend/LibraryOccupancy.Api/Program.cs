@@ -19,9 +19,12 @@ builder.Services.AddApplicationServices(builder.Configuration, builder.Environme
 
 var app = builder.Build();
 
+await app.MigrateDatabaseAsync();
+
 app.ValidateAutoMapperConfiguration();
 app.ValidateFieldDisplayNamesConfiguration();
 await app.SeedInitialAdminAsync();
+await app.SeedDemoLibrariesAsync();
 
 app.ConfigureMiddleware();
 
