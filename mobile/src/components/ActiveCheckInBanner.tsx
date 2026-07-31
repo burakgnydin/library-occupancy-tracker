@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { usePulseAnimation } from '../hooks/usePulseAnimation';
 import { colors } from '../theme/colors';
+import { parseUtcDate } from '../utils/parseServerDate';
 
 interface ActiveCheckInBannerProps {
   // checkInStatus'un tamami yerine bilerek tek tek primitive'ler aliniyor -
@@ -24,7 +25,7 @@ const TICK_MS = 1000;
 const PULSE_DURATION_MS = 700;
 
 function formatCheckedInAtLabel(checkedInAt: string): string {
-  const date = new Date(checkedInAt);
+  const date = parseUtcDate(checkedInAt);
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}'den beri`;
@@ -33,7 +34,7 @@ function formatCheckedInAtLabel(checkedInAt: string): string {
 function formatElapsedLabel(checkedInAt: string, now: number): string {
   // Cihaz saati ile sunucu saati arasinda kucuk bir sapma olursa (veya
   // checkedInAt henuz "simdi"den once gelmemisse) negatif sureyi 0'a sabitler.
-  const elapsedMs = Math.max(0, now - new Date(checkedInAt).getTime());
+  const elapsedMs = Math.max(0, now - parseUtcDate(checkedInAt).getTime());
   const totalMinutes = Math.floor(elapsedMs / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
