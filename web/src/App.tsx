@@ -12,9 +12,12 @@ import StaffPage from './pages/StaffPage';
 // eski sayfayi kaldirirken/yeni sayfayi eklerken animasyonu tamamlamasini bekleyebilmesi
 // icin `location`'i hem useLocation'dan okuyup HEM de <Routes location={location}> olarak
 // acikca gecmek gerekiyor (aksi halde <Routes> URL degisir degismez hemen yeni eslesen
-// route'u render eder, cikis animasyonuna firsat kalmadan). "wait" modu yerine varsayilan
-// (es zamanli) mod kullaniliyor - cikis/giris ust uste binmesin diye, cikis suresi girisin
-// yarisi kadar kisa tutulup toplam gecis suresi ~150-200ms araliginda kaliyor.
+// route'u render eder, cikis animasyonuna firsat kalmadan). mode="wait" bilerek kullaniliyor:
+// AnimatePresence, eski sayfanin cikis animasyonu (asagida exit.transition.duration: 0.1)
+// TAMAMEN bitmeden yeni sayfayi hic mount etmez - bu yuzden iki animasyonun ayni anda
+// gorunmesi yapisal olarak imkansiz (varsayilan "sync" modda ikisi ayni anda oynardi).
+// Cikis suresi girisin yarisi kadar kisa tutuldugu icin toplam gecis suresi ~150-200ms
+// araliginda kaliyor.
 function AnimatedRoutes() {
   const location = useLocation();
 

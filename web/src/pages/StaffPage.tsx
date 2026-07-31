@@ -10,6 +10,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { usePagedList } from '../hooks/usePagedList';
 import { createStaff, deleteUser, getUsers, updateUserRole } from '../services/userService';
 import { useAuthStore } from '../store/authStore';
+import { COMPACT_INPUT_CLASSNAME, COMPACT_INPUT_SMALL_CLASSNAME } from '../styles/inputStyles';
 import { getApiErrorMessage } from '../utils/apiError';
 import type { UserRole } from '../types/auth';
 import { ROLE_LABELS } from '../types/auth';
@@ -216,7 +217,7 @@ export default function StaffPage() {
               placeholder="İsim veya e-posta ara..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="w-56 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
+              className={`w-56 ${COMPACT_INPUT_CLASSNAME}`}
             />
             <select
               value={roleFilter}
@@ -224,7 +225,7 @@ export default function StaffPage() {
                 setRoleFilter(event.target.value as UserRole | '');
                 setPageNumber(1);
               }}
-              className="rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
+              className={COMPACT_INPUT_CLASSNAME}
             >
               <option value="">Tüm Roller</option>
               <option value="SuperAdmin">{ROLE_LABELS.SuperAdmin}</option>
@@ -297,7 +298,7 @@ export default function StaffPage() {
                                 value={user.role}
                                 disabled={isProcessing}
                                 onChange={(event) => handleRoleChange(user, event.target.value as UserRole)}
-                                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+                                className={COMPACT_INPUT_SMALL_CLASSNAME}
                               >
                                 <option value="SuperAdmin">{ROLE_LABELS.SuperAdmin}</option>
                                 <option value="Admin">{ROLE_LABELS.Admin}</option>

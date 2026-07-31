@@ -35,7 +35,26 @@ export default function Modal({ title, onClose, children, maxWidthClassName = 'm
     (firstFocusable ?? container)?.focus();
 
     return () => {
-      previouslyFocusedElementRef.current?.focus();
+      const previouslyFocused = previouslyFocusedElementRef.current;
+      // Normal kapanista (Esc/backdrop/X butonu) bu element hala DOM'dadir - ama modal,
+      // sayfa navigasyonuyla (orn. tarayici geri/ileri tuşu) birlikte unmount olduysa,
+      // tetikleyici element de (orn. "+ Yeni Kutuphane Ekle" butonu) AYNI ANDA DOM'dan
+      // kaldiriliyor olabilir. Kopmus (detached) bir node'a focus() cagirmak sessizce
+      // no-op'tur - odak document.body'de kalir, klavye kullanicisi hicbir yere
+      // odaklanmamis olur. document.contains ile once bunu kontrol edip, artik DOM'da
+      // degilse yeni sayfada mantikli bir yere (main icerik alani) dusuyoruz.
+      if (previouslyFocused && document.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+        return;
+      }
+
+      const main = document.querySelector<HTMLElement>('main');
+      if (main) {
+        if (!main.hasAttribute('tabindex')) {
+          main.setAttribute('tabindex', '-1');
+        }
+        main.focus();
+      }
     };
   }, []);
 

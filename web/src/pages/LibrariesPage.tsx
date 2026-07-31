@@ -9,6 +9,7 @@ import QrCodeModal from '../components/QrCodeModal';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { usePagedList } from '../hooks/usePagedList';
 import { deleteLibrary, getLibraries } from '../services/libraryService';
+import { COMPACT_INPUT_CLASSNAME } from '../styles/inputStyles';
 import { getApiErrorMessage } from '../utils/apiError';
 import type { Library, LibraryQueryParams, OccupancyStatus } from '../types/library';
 
@@ -111,19 +112,19 @@ export default function LibrariesPage() {
               placeholder="İsim ara..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="w-48 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
+              className={`w-48 ${COMPACT_INPUT_CLASSNAME}`}
             />
             <input
               placeholder="Şehir"
               value={city}
               onChange={(event) => setCity(event.target.value)}
-              className="w-36 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
+              className={`w-36 ${COMPACT_INPUT_CLASSNAME}`}
             />
             <input
               placeholder="İlçe"
               value={district}
               onChange={(event) => setDistrict(event.target.value)}
-              className="w-36 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary-light"
+              className={`w-36 ${COMPACT_INPUT_CLASSNAME}`}
             />
           </div>
 
