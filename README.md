@@ -138,15 +138,4 @@ library-occupancy-tracker/
 
 ---
 
-## Bilinen Eksikler / Planlananlar
 
-- Türkçe hata mesajı/yorum kalıntılarının kod tabanı genelinde İngilizce'ye çevrilmesi.
-- Revoke edilmiş/süresi dolmuş refresh token'lar için periyodik temizlik job'ı.
-- Mobil tarafta network sınırında runtime şema doğrulaması (şu an yalnızca derleme zamanı TypeScript tipleri güveniliyor).
-- LAN modunda (tünelsiz) bazı ağ yapılandırmalarında yaşanabilen bağlantı sorunları.
-
-Ayrıntılı liste için ilgili alt proje README'lerindeki "Bilinen Eksik / Planlı" bölümlerine bakın.
-
-## Katkıda Bulunanlar
-
-Bu proje TraKütüp ekibi tarafından geliştirilmektedir.
